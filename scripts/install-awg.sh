@@ -148,11 +148,12 @@ if ! modprobe amneziawg; then
 fi
 
 # Verify module is now listed
-if ! lsmod | grep -q '^amneziawg '; then
-    err "amneziawg module not visible in lsmod after modprobe"
+# /sys/module/ is set synchronously on load; lsmod can lag on some RPi kernels.
+if [[ ! -d /sys/module/amneziawg ]]; then
+    err "amneziawg module not visible in /sys/module after modprobe"
     exit 6
 fi
-log "Kernel module loaded: amneziawg (verified via lsmod)"
+log "Kernel module loaded: amneziawg (verified via /sys/module)"
 
 # Verify awg binary
 AWG_PATH=$(command -v awg 2>/dev/null || true)

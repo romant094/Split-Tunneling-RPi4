@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-19T07:45:00Z"
+last_updated: "2026-05-19T09:00:00Z"
 progress:
   total_phases: 3
   completed_phases: 0
@@ -55,13 +55,21 @@ Status: Both plans complete — awaiting end-of-phase human-verify checkpoint
 - D-09: sed pipeline substitution of {{PrivateKey}}/{{PublicKey}}/{{PresharedKey}} in amnezia.key.claude.txt
 - D-10: validate_key() with ^[A-Za-z0-9+/]{43}=$ regex guards all key use before any SSH operation
 - chmod 600 on mktemp BEFORE writing key material (T-01-SEC); trap EXIT for cleanup
+- D-11: install-awg.sh Stage 6 uses /sys/module/amneziawg check instead of lsmod grep — /sys/module is set synchronously on load; lsmod can lag on kernel 6.12.25+rpt-rpi-v8
+
+## Hardware Verified
+
+- install-awg.sh: ✓ verified on RPi 4 (kernel 6.12.25+rpt-rpi-v8) — 2026-05-19
+  - INST-01: awg + awg-quick at /usr/bin ✓
+  - INST-02: ip_forward=1 persisted via /etc/sysctl.d/99-vpn-gateway.conf ✓
+  - amneziawg kernel module loaded ✓
 
 ## Last Session
 
-**Stopped at:** Completed 01-02-PLAN.md (deploy.sh + .env.secrets.example + .gitignore)
-**Timestamp:** 2026-05-19T07:45:00Z
-**Resume:** End-of-phase human-verify checkpoint for Phase 1 (run deploy.sh against real pi4)
+**Stopped at:** install-awg.sh verified on real pi4; fix applied to lsmod check (D-11)
+**Timestamp:** 2026-05-19T09:00:00Z
+**Resume:** Run deploy.sh against real pi4 to complete Phase 1 human-verify checkpoint
 
 ---
 *Initialized: 2026-05-18*
-*Updated: 2026-05-19 — Plan 01-02 complete; Phase 1 all plans done*
+*Updated: 2026-05-19 — Plan 01-02 complete; Phase 1 all plans done; install-awg.sh verified on real pi4*
