@@ -7,8 +7,8 @@
 
 ### Install
 
-- [ ] **INST-01**: AmneziaWG installed; `awg` binary available on RPi
-- [ ] **INST-02**: IP forwarding enabled persistently (sysctl, survives reboot)
+- [x] **INST-01**: AmneziaWG installed; `awg` binary available on RPi ✓ (01-01, 2026-05-19)
+- [x] **INST-02**: IP forwarding enabled persistently (sysctl, survives reboot) ✓ (01-01, 2026-05-19)
 
 ### Config
 
@@ -73,8 +73,8 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INST-01 | Phase 1 | Pending |
-| INST-02 | Phase 1 | Pending |
+| INST-01 | Phase 1 | Complete (01-01) |
+| INST-02 | Phase 1 | Complete (01-01) |
 | CONF-01 | Phase 1 | Pending |
 | CONF-02 | Phase 1 | Pending |
 | ROUT-01 | Phase 2 | Pending |
@@ -101,4 +101,4 @@
 
 ---
 *Requirements defined: 2026-05-18*
-*Last updated: 2026-05-18 after initial definition*
+*Last updated: 2026-05-19 — INST-01, INST-02 completed by Plan 01-01*
