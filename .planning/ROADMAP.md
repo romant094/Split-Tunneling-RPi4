@@ -38,6 +38,10 @@
 3. awg0.conf present at /etc/amnezia/amneziawg/awg0.conf on RPi
 4. `sudo awg-quick up awg0` succeeds; `sudo awg show` shows peer handshake
 
+**Plans:** 2 plans
+- [ ] 01-01-PLAN.md — RPi-side AmneziaWG installer + persistent IP forwarding (INST-01, INST-02)
+- [ ] 01-02-PLAN.md — deploy.sh orchestrator + secrets hygiene + awg0.conf and vpn-gateway.env deployment (CONF-01, CONF-02; wires INST-01, INST-02 via Plan 01)
+
 ---
 
 ### Phase 2: Routing & NAT
@@ -125,3 +129,4 @@
 
 ---
 *Created: 2026-05-18*
+*Updated: 2026-05-19 — Phase 1 plans added*
