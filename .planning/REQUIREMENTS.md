@@ -12,8 +12,8 @@
 
 ### Config
 
-- [ ] **CONF-01**: awg0.conf deployed to `/etc/amnezia/amneziawg/awg0.conf` from template
-- [ ] **CONF-02**: `/etc/vpn-gateway.env` deployed with all variables from `.env`
+- [x] **CONF-01**: awg0.conf deployed to `/etc/amnezia/amneziawg/awg0.conf` from template ✓ (01-02, 2026-05-19)
+- [x] **CONF-02**: `/etc/vpn-gateway.env` deployed with all variables from `.env` ✓ (01-02, 2026-05-19)
 
 ### Routing
 
