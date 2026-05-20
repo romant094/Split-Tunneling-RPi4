@@ -38,8 +38,11 @@ INSTALLER_SCRIPT="scripts/install-awg.sh"
 ROUTING_SH_LOCAL="scripts/routing.sh"
 ROUTING_SH_REMOTE="/etc/routing.sh"
 ROUTING_SH_TMP="/tmp/routing.sh"
+VPN_ROUTING_SERVICE_LOCAL="systemd/vpn-routing.service"
+VPN_ROUTING_SERVICE_REMOTE="/etc/systemd/system/vpn-routing.service"
+VPN_ROUTING_SERVICE_TMP="/tmp/vpn-routing.service.tmp"
 
-TOTAL_STAGES=11
+TOTAL_STAGES=13
 
 # ─── Argument Parsing (D-12) ─────────────────────────────────────────────────
 RUN_ROUTING=true
@@ -92,6 +95,10 @@ if [[ ! -f "$ROUTING_SH_LOCAL" ]]; then
     echo "ERROR: $ROUTING_SH_LOCAL not found — run from the repo root" >&2
     exit 1
 fi
+if [[ ! -f "$VPN_ROUTING_SERVICE_LOCAL" ]]; then
+    echo "ERROR: $VPN_ROUTING_SERVICE_LOCAL not found — run from the repo root" >&2
+    exit 1
+fi
 
 echo "       All required files present."
 
@@ -117,7 +124,7 @@ echo "[3/${TOTAL_STAGES}] Verifying SSH connectivity to ${SSH_HOST}..."
 if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "$SSH_HOST" true; then
     echo "ERROR: Cannot connect to ${SSH_HOST} via SSH" >&2
     echo "       Ensure ~/.ssh/config has a 'pi4' alias with SSH key auth (D-04, D-06)" >&2
-    echo "       Run: ssh-copy-id ar@192.168.1.254  (if key not yet installed)" >&2
+    echo "       Run: ssh-copy-id ar@<rpi-ip>  (if key not yet installed)" >&2
     exit 1
 fi
 
@@ -231,12 +238,23 @@ else
   echo "       ssh ${SSH_HOST} \"sudo ${ROUTING_SH_REMOTE}\""
 fi
 
+# ─── Stage 12: Deploy vpn-routing.service unit file to RPi (D-11) ──────────
+echo "[12/${TOTAL_STAGES}] Deploying vpn-routing.service to ${SSH_HOST}:${VPN_ROUTING_SERVICE_REMOTE}..."
+scp -o BatchMode=yes "${VPN_ROUTING_SERVICE_LOCAL}" "${SSH_HOST}:${VPN_ROUTING_SERVICE_TMP}"
+ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${VPN_ROUTING_SERVICE_TMP} ${VPN_ROUTING_SERVICE_REMOTE} && sudo chmod 644 ${VPN_ROUTING_SERVICE_REMOTE} && sudo chown root:root ${VPN_ROUTING_SERVICE_REMOTE}"
+echo "       vpn-routing.service deployed (mode 644, root:root)."
+
+# ─── Stage 13: Reload systemd daemon and enable autostart services ───────────
+echo "[13/${TOTAL_STAGES}] Reloading systemd and enabling autostart services on ${SSH_HOST}..."
+ssh -o BatchMode=yes "${SSH_HOST}" "sudo systemctl daemon-reload && sudo systemctl enable awg-quick@awg0 && sudo systemctl enable vpn-routing.service"
+echo "       systemctl daemon-reload complete; awg-quick@awg0 + vpn-routing.service enabled (AUTO-01, AUTO-02)."
+
 # ─── Final Summary ───────────────────────────────────────────────────────────
 # Tunnel bring-up is NOT automated — RESEARCH.md Pitfall 5 (awg-quick up is not idempotent)
 # The commands below are printed for the developer to run manually.
 echo ""
 echo "================================================================"
-echo " Phase 1 + 2 deploy successful."
+echo " Phase 1 + 2 + 3 (autostart) deploy successful."
 echo "================================================================"
 echo ""
 echo " Deployed:"
@@ -245,6 +263,7 @@ echo "   CONF-02: ${ENV_REMOTE}  (mode 0644, root:root)"
 echo "   INST-01: awg binary present at ${awg_path}"
 echo "   INST-02: net.ipv4.ip_forward = ${ip_forward}"
 echo "   ROUT-01..04 + NAT-01..03: ${ROUTING_SH_REMOTE} (chmod +x)"
+echo "   AUTO-01 + AUTO-02: vpn-routing.service + awg-quick@awg0 enabled at boot"
 echo ""
 echo " Next steps (run manually — tunnel bring-up is intentionally NOT automated):"
 echo ""
@@ -273,4 +292,11 @@ echo "   sudo iptables -t nat -L POSTROUTING -n -v       # expect MASQUERADE on 
 echo ""
 echo " If --no-run was used, activate routing manually:"
 echo "   ssh pi4 \"sudo /etc/routing.sh\""
+echo ""
+echo " Phase 3 autostart verification (run after deploy):"
+echo "   ssh pi4 \"systemctl is-active awg-quick@awg0\"       # expect: active"
+echo "   ssh pi4 \"systemctl is-active vpn-routing.service\"  # expect: active"
+echo "   ssh pi4 \"systemctl is-enabled awg-quick@awg0\"      # expect: enabled"
+echo "   ssh pi4 \"systemctl is-enabled vpn-routing.service\" # expect: enabled"
+echo "   # Reboot test: ssh pi4 sudo reboot; wait 60s; re-run is-active checks"
 echo "================================================================"
