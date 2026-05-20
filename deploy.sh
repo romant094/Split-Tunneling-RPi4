@@ -31,7 +31,7 @@ set -euo pipefail
 
 # ─── Configuration (D-04, D-09) ─────────────────────────────────────────────
 SSH_HOST="pi4"
-TEMPLATE="amnezia.key.claude.txt"
+TEMPLATE="amnezia.key.template.txt"
 AWG_CONF_REMOTE="/etc/amnezia/amneziawg/awg0.conf"
 ENV_REMOTE="/etc/vpn-gateway.env"
 INSTALLER_SCRIPT="scripts/install-awg.sh"
@@ -183,7 +183,7 @@ echo "       vpn-gateway.env deployed (mode 644, root:root)."
 echo "[8/${TOTAL_STAGES}] Running post-deploy verification on ${SSH_HOST}..."
 
 # Verify both config files exist
-if ! ssh "$SSH_HOST" "test -f ${AWG_CONF_REMOTE}"; then
+if ! ssh "$SSH_HOST" "sudo test -f ${AWG_CONF_REMOTE}"; then
     echo "ERROR: ${AWG_CONF_REMOTE} not found on ${SSH_HOST} after deploy" >&2
     exit 1
 fi
