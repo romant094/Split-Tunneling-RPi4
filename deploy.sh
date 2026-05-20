@@ -41,8 +41,12 @@ ROUTING_SH_TMP="/tmp/routing.sh"
 VPN_ROUTING_SERVICE_LOCAL="systemd/vpn-routing.service"
 VPN_ROUTING_SERVICE_REMOTE="/etc/systemd/system/vpn-routing.service"
 VPN_ROUTING_SERVICE_TMP="/tmp/vpn-routing.service.tmp"
+UPDATE_VPN_ROUTES_LOCAL="scripts/update-vpn-routes"
+UPDATE_VPN_ROUTES_REMOTE="/etc/update-vpn-routes"
+UPDATE_VPN_ROUTES_TMP="/tmp/update-vpn-routes.tmp"
+CRON_FILE_REMOTE="/etc/cron.d/vpn-routes"
 
-TOTAL_STAGES=13
+TOTAL_STAGES=15
 
 # ─── Argument Parsing (D-12) ─────────────────────────────────────────────────
 RUN_ROUTING=true
@@ -99,6 +103,10 @@ if [[ ! -f "$VPN_ROUTING_SERVICE_LOCAL" ]]; then
     echo "ERROR: $VPN_ROUTING_SERVICE_LOCAL not found — run from the repo root" >&2
     exit 1
 fi
+if [[ ! -f "$UPDATE_VPN_ROUTES_LOCAL" ]]; then
+    echo "ERROR: $UPDATE_VPN_ROUTES_LOCAL not found — run from the repo root" >&2
+    exit 1
+fi
 
 echo "       All required files present."
 
@@ -108,6 +116,16 @@ source .env
 # shellcheck source=/dev/null
 source .env.secrets
 # Keys are now in memory as shell variables; never echoed or logged.
+
+# Validate CRON_UPDATE_HOUR before it is used in Stage 15 (T-03-12: prevent injection)
+if [[ -z "${CRON_UPDATE_HOUR:-}" ]]; then
+    echo "ERROR: CRON_UPDATE_HOUR not set in .env (add CRON_UPDATE_HOUR=5)" >&2
+    exit 1
+fi
+if ! [[ "${CRON_UPDATE_HOUR}" =~ ^[0-9]+$ ]] || (( CRON_UPDATE_HOUR < 0 || CRON_UPDATE_HOUR > 23 )); then
+    echo "ERROR: CRON_UPDATE_HOUR must be an integer 0-23, got: ${CRON_UPDATE_HOUR}" >&2
+    exit 1
+fi
 
 # ─── Stage C: Key validation (D-10) ─────────────────────────────────────────
 echo "[2/${TOTAL_STAGES}] Validating VPN keys from .env.secrets..."
@@ -249,12 +267,27 @@ echo "[13/${TOTAL_STAGES}] Reloading systemd and enabling autostart services on 
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo systemctl daemon-reload && sudo systemctl enable awg-quick@awg0 && sudo systemctl enable vpn-routing.service"
 echo "       systemctl daemon-reload complete; awg-quick@awg0 + vpn-routing.service enabled (AUTO-01, AUTO-02)."
 
+# ─── Stage 14: Deploy update-vpn-routes to RPi (D-11, D-07, T-03-08) ─────────
+echo "[14/${TOTAL_STAGES}] Deploying update-vpn-routes to ${SSH_HOST}:${UPDATE_VPN_ROUTES_REMOTE}..."
+scp -o BatchMode=yes "${UPDATE_VPN_ROUTES_LOCAL}" "${SSH_HOST}:${UPDATE_VPN_ROUTES_TMP}"
+ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${UPDATE_VPN_ROUTES_TMP} ${UPDATE_VPN_ROUTES_REMOTE} && sudo chmod +x ${UPDATE_VPN_ROUTES_REMOTE} && sudo chown root:root ${UPDATE_VPN_ROUTES_REMOTE}"
+echo "       update-vpn-routes deployed (chmod +x, root:root)."
+
+# ─── Stage 15: Write /etc/cron.d/vpn-routes (D-04, D-05, D-07, T-03-07) ──────
+echo "[15/${TOTAL_STAGES}] Writing cron entry to ${SSH_HOST}:${CRON_FILE_REMOTE} (CRON_UPDATE_HOUR=${CRON_UPDATE_HOUR})..."
+# Build the cron line locally so CRON_UPDATE_HOUR is substituted on the macOS side (D-05)
+# 6-field cron.d format: minute hour day month weekday user command
+cron_line="0 ${CRON_UPDATE_HOUR} * * * root ${UPDATE_VPN_ROUTES_REMOTE} >> /var/log/vpn-routes.log 2>&1"
+# printf '%s\n' guarantees a trailing newline — cron.d files without trailing newline are silently ignored (Pitfall 2)
+printf '%s\n' "${cron_line}" | ssh -o BatchMode=yes "${SSH_HOST}" "sudo tee ${CRON_FILE_REMOTE} > /dev/null && sudo chmod 644 ${CRON_FILE_REMOTE} && sudo chown root:root ${CRON_FILE_REMOTE}"
+echo "       /etc/cron.d/vpn-routes installed (mode 644, root:root, runs daily at ${CRON_UPDATE_HOUR}:00)."
+
 # ─── Final Summary ───────────────────────────────────────────────────────────
 # Tunnel bring-up is NOT automated — RESEARCH.md Pitfall 5 (awg-quick up is not idempotent)
 # The commands below are printed for the developer to run manually.
 echo ""
 echo "================================================================"
-echo " Phase 1 + 2 + 3 (autostart) deploy successful."
+echo " Phase 1 + 2 + 3 (autostart + cron) deploy successful."
 echo "================================================================"
 echo ""
 echo " Deployed:"
@@ -264,6 +297,7 @@ echo "   INST-01: awg binary present at ${awg_path}"
 echo "   INST-02: net.ipv4.ip_forward = ${ip_forward}"
 echo "   ROUT-01..04 + NAT-01..03: ${ROUTING_SH_REMOTE} (chmod +x)"
 echo "   AUTO-01 + AUTO-02: vpn-routing.service + awg-quick@awg0 enabled at boot"
+echo "   AUTO-03: /etc/cron.d/vpn-routes (runs ${UPDATE_VPN_ROUTES_REMOTE} daily at ${CRON_UPDATE_HOUR}:00)"
 echo ""
 echo " Next steps (run manually — tunnel bring-up is intentionally NOT automated):"
 echo ""
@@ -299,4 +333,14 @@ echo "   ssh pi4 \"systemctl is-active vpn-routing.service\"  # expect: active"
 echo "   ssh pi4 \"systemctl is-enabled awg-quick@awg0\"      # expect: enabled"
 echo "   ssh pi4 \"systemctl is-enabled vpn-routing.service\" # expect: enabled"
 echo "   # Reboot test: ssh pi4 sudo reboot; wait 60s; re-run is-active checks"
+echo ""
+echo " Phase 3 cron verification:"
+echo "   ssh pi4 \"sudo cat /etc/cron.d/vpn-routes\""
+echo "   # expect: 0 ${CRON_UPDATE_HOUR} * * * root /etc/update-vpn-routes >> /var/log/vpn-routes.log 2>&1"
+echo "   ssh pi4 \"sudo ls -l /etc/cron.d/vpn-routes\""
+echo "   # expect: -rw-r--r-- root root"
+echo "   ssh pi4 \"sudo /etc/update-vpn-routes\""
+echo "   # one-off manual run; expect exit 0"
+echo "   ssh pi4 \"sudo journalctl -t vpn-routes -n 20 --no-pager\""
+echo "   # expect syslog entries from the manual run"
 echo "================================================================"

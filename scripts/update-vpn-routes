@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# /etc/update-vpn-routes
+#
+# Checksum-based daily RU subnet refresh for the VPN split-tunnel gateway.
+#
+# Requirement:  AUTO-03 — routing.sh runs daily via /etc/cron.d/vpn-routes
+# Decisions:    D-06 (sha256 checksum compare), D-07 (deploy target /etc/update-vpn-routes),
+#               D-09 (syslog via logger -t "vpn-routes")
+# Driven by:    /etc/cron.d/vpn-routes (written by deploy.sh Stage 15 from CRON_UPDATE_HOUR)
+#
+# On download failure: exit 0 (no cron failure mail; existing routes remain intact)
+# On hash match:       exit 0 (no rebuild; no connection disruption)
+# On hash mismatch:    mv temp → /etc/vpn-ru-subnets.txt; run /etc/routing.sh --no-update
+# On rebuild failure:  set -e propagates; cron generates failure mail (acceptable — rebuild failure IS an error)
+
+set -euo pipefail
+
+# ─── Constants ────────────────────────────────────────────────────────────────
+SUBNET_FILE="/etc/vpn-ru-subnets.txt"
+# Distinct from routing.sh's /tmp/ru-subnets.tmp to avoid collisions if cron
+# runs while an operator is also running routing.sh manually.
+SUBNET_TMP="/tmp/ru-subnets-cron.tmp"
+
+# ─── Logging (D-09: syslog via logger; tag "vpn-routes") ─────────────────────
+log() { logger -t "vpn-routes" "$*"; }
+
+# ─── Source environment ───────────────────────────────────────────────────────
+# /etc/vpn-gateway.env is deployed by Phase 1 (deploy.sh Stage H, CONF-02).
+# Provides: RU_SUBNET_URL (and other vars not used here).
+if [[ ! -f /etc/vpn-gateway.env ]]; then
+    log "ERROR: /etc/vpn-gateway.env not found — cannot determine RU_SUBNET_URL"
+    exit 1
+fi
+# shellcheck source=/dev/null
+source /etc/vpn-gateway.env
+
+# ─── Stage 1: Download RU subnet list to temp file ───────────────────────────
+log "Checking for RU subnet list update..."
+
+if ! curl -fsSL "${RU_SUBNET_URL}" -o "${SUBNET_TMP}" 2>/dev/null; then
+    log "Download failed — skipping update, routes unchanged"
+    rm -f "${SUBNET_TMP}"
+    exit 0  # Pattern 3: exit 0 on download failure — do NOT generate cron failure mail
+fi
+
+# ─── Stage 2: SHA256 checksum compare (D-06) ─────────────────────────────────
+new_hash=$(sha256sum "${SUBNET_TMP}" | cut -d' ' -f1)
+
+if [[ -f "${SUBNET_FILE}" ]]; then
+    old_hash=$(sha256sum "${SUBNET_FILE}" | cut -d' ' -f1)
+else
+    old_hash=""
+fi
+
+if [[ "${new_hash}" == "${old_hash}" ]]; then
+    log "Subnet list unchanged (hash: ${new_hash:0:12}...) — no rebuild needed"
+    rm -f "${SUBNET_TMP}"
+    exit 0
+fi
+
+# ─── Stage 3: Atomic swap + rebuild routes ────────────────────────────────────
+log "Subnet list changed (old: ${old_hash:0:12}... new: ${new_hash:0:12}...) — rebuilding routes"
+
+# mv is atomic on the same filesystem (/tmp → /etc, both on rootfs on RPi)
+mv "${SUBNET_TMP}" "${SUBNET_FILE}"
+
+# --no-update: skip re-download; use the file we just mv'd into place
+# Non-zero exit from routing.sh propagates via set -e → cron generates failure mail
+# (acceptable: a rebuild failure IS an error worth notifying about)
+/etc/routing.sh --no-update
+
+log "Route rebuild complete"
