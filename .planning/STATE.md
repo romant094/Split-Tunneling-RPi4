@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 3 context gathered
-last_updated: "2026-05-20T15:11:32.660Z"
+stopped_at: Phase 3 complete
+last_updated: "2026-05-20T17:40:00.000Z"
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 7
-  completed_plans: 4
-  percent: 33
+  completed_plans: 7
+  percent: 50
 ---
 
 # State: RPi VPN Gateway
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 
 Goal: AmneziaWG installed, config deployed, IP forwarding on, tunnel operational
 
-Status: Ready to execute
+Status: Executing Phase 03
 
 ## Phase Progress
 
@@ -36,12 +36,12 @@ Status: Ready to execute
 |-------|--------|-------|----------|
 | 1 — Foundation & Config | ✓ Plans done | 2/2 done | 100% |
 | 2 — Routing & NAT | ✓ Plans done | 2/2 done | 100% |
-| 3 — Autostart, Cron & Rollback | ○ Pending | — | 0% |
+| 3 — Autostart, Cron & Rollback | ✓ Plans done | 3/3 done | 100% |
 
 ## Requirements
 
 - v1 total: 20
-- Completed: 11 (INST-01, INST-02 — by install-awg.sh; CONF-01, CONF-02 — by deploy.sh; ROUT-01–04, NAT-01–03 — by scripts/routing.sh)
+- Completed: 20 (INST-01, INST-02 — by install-awg.sh; CONF-01, CONF-02 — by deploy.sh; ROUT-01–04, NAT-01–03 — by scripts/routing.sh; AUTO-01–03, ROLL-01–02, VRFY-01–04 — by Phase 3)
 - In progress: 0
 
 ## Decisions
@@ -71,13 +71,13 @@ Status: Ready to execute
 
 ## Last Session
 
-**Stopped at:** Phase 3 context gathered
-**Timestamp:** 2026-05-20T12:25:00Z
-**Resume:** Run Phase 03 (autostart, cron, rollback) — Phase 2 complete, routing.sh and deploy.sh both ready
+**Stopped at:** Phase 3 complete — all 3 plans executed, verified on live RPi
+**Timestamp:** 2026-05-20T17:40:00Z
+**Resume:** Run Phase 04 (traffic logging / visibility) — Phase 3 complete, gateway fully operational
 
 ---
 *Initialized: 2026-05-18*
-*Updated: 2026-05-20 — Plan 02-02 complete; deploy.sh extended with Phase 2 stages (D-11 SCP routing.sh, D-12 --no-run flag)*
+*Updated: 2026-05-20 — Phase 3 complete; deploy.sh at TOTAL_STAGES=16; vpn-routing.service, update-vpn-routes, vpn-rollback.sh all deployed and verified on live RPi*
 
 ## Accumulated Context
 

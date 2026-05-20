@@ -112,9 +112,11 @@
 4. All VRFY checks pass before rollback
 
 **Plans:** 3 plans
-- [ ] 03-01-PLAN.md — vpn-routing.service unit file + deploy.sh Stages 12–13 (daemon-reload + systemctl enable AUTO-01, AUTO-02, VRFY-01..04)
-- [ ] 03-02-PLAN.md — scripts/update-vpn-routes (sha256 checksum cron script) + .env CRON_UPDATE_HOUR=5 + deploy.sh Stages 14–15 (AUTO-03)
-- [ ] 03-03-PLAN.md — scripts/vpn-rollback.sh + deploy.sh Stage 16 (ROLL-01, ROLL-02)
+- [x] 03-01-PLAN.md — vpn-routing.service unit file + deploy.sh Stages 12–13 (daemon-reload + systemctl enable AUTO-01, AUTO-02, VRFY-01..04) ✓ 2026-05-20
+- [x] 03-02-PLAN.md — scripts/update-vpn-routes (sha256 checksum cron script) + .env CRON_UPDATE_HOUR=5 + deploy.sh Stages 14–15 (AUTO-03) ✓ 2026-05-20
+- [x] 03-03-PLAN.md — scripts/vpn-rollback.sh + deploy.sh Stage 16 (ROLL-01, ROLL-02) ✓ 2026-05-20
+
+**Phase 3 complete ✓**
 
 ---
 
