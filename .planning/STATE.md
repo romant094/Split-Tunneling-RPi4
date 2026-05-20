@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan 02-01 complete — scripts/routing.sh authored
-last_updated: "2026-05-20T12:20:00Z"
+stopped_at: Plan 02-02 complete — deploy.sh extended with Phase 2 routing.sh deploy + activate
+last_updated: "2026-05-20T12:25:00Z"
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # State: RPi VPN Gateway
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Non-RU traffic exits through AmneziaWG VPN; RU traffic exits direct via ISP — transparent to LAN devices, survives reboots, fully reversible.
-**Current focus:** Phase 02 — routing-nat
+**Current focus:** Phase 03 — autostart-cron-rollback
 
 ## Current Phase
 
@@ -35,7 +35,7 @@ Status: Executing Phase 02
 | Phase | Status | Plans | Progress |
 |-------|--------|-------|----------|
 | 1 — Foundation & Config | ✓ Plans done | 2/2 done | 100% |
-| 2 — Routing & NAT | In Progress | 1/2 done | 50% |
+| 2 — Routing & NAT | ✓ Plans done | 2/2 done | 100% |
 | 3 — Autostart, Cron & Rollback | ○ Pending | — | 0% |
 
 ## Requirements
@@ -59,6 +59,8 @@ Status: Executing Phase 02
 - D-11: install-awg.sh Stage 6 uses /sys/module/amneziawg check instead of lsmod grep — /sys/module is set synchronously on load; lsmod can lag on kernel 6.12.25+rpt-rpi-v8
 - routing.sh D-06: Flush-and-rebuild (ip route flush dev awg0) for idempotent routing — clean slate on every run
 - routing.sh D-07: iptables idempotency via iptables -C check before every -A — no duplicate MASQUERADE rules
+- deploy.sh D-11: routing.sh deployed via SCP /tmp staging then sudo mv + chmod +x (matches Phase 1 pattern)
+- deploy.sh D-12: --no-run flag skips routing.sh activation; without it, routing.sh runs automatically after deploy
 
 ## Hardware Verified
 
@@ -69,10 +71,10 @@ Status: Executing Phase 02
 
 ## Last Session
 
-**Stopped at:** Plan 02-01 complete — scripts/routing.sh authored
-**Timestamp:** 2026-05-20T12:20:00Z
-**Resume:** Run Plan 02-02 to extend deploy.sh with Phase 2 stages (SCP routing.sh + run it on RPi)
+**Stopped at:** Plan 02-02 complete — deploy.sh extended with Phase 2 routing.sh deploy + activate stages
+**Timestamp:** 2026-05-20T12:25:00Z
+**Resume:** Run Phase 03 (autostart, cron, rollback) — Phase 2 complete, routing.sh and deploy.sh both ready
 
 ---
 *Initialized: 2026-05-18*
-*Updated: 2026-05-20 — Plan 02-01 complete; scripts/routing.sh authored (ROUT-01-04, NAT-01-03)*
+*Updated: 2026-05-20 — Plan 02-02 complete; deploy.sh extended with Phase 2 stages (D-11 SCP routing.sh, D-12 --no-run flag)*

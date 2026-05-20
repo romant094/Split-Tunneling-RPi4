@@ -11,7 +11,7 @@
 | # | Phase | Goal | Requirements | Success Criteria |
 |---|-------|------|--------------|------------------|
 | 1 | Foundation & Config | AmneziaWG running, config deployed | INST-01, INST-02, CONF-01, CONF-02 | 4 |
-| 2 | Routing & NAT | 1/2 | In Progress|  |
+| 2 | Routing & NAT | Split-tunnel routing active, LAN devices NATed through RPi | ROUT-01–04, NAT-01–03 | 6 |
 | 3 | Autostart, Cron & Rollback | Survives reboots, daily refresh, one-command rollback | AUTO-01–03, ROLL-01–02, VRFY-01–04 | 4 |
 
 ---
@@ -42,6 +42,8 @@
 - [x] 01-01-PLAN.md — RPi-side AmneziaWG installer + persistent IP forwarding (INST-01, INST-02) ✓ 2026-05-19
 - [x] 01-02-PLAN.md — deploy.sh orchestrator + secrets hygiene + awg0.conf and vpn-gateway.env deployment (CONF-01, CONF-02; wires INST-01, INST-02 via Plan 01) ✓ 2026-05-19
 
+**Phase 1 complete ✓**
+
 ---
 
 ### Phase 2: Routing & NAT
@@ -60,6 +62,13 @@
 
 **Deliverables:**
 - `scripts/routing.sh` (deployed to /etc/routing.sh)
+- `deploy.sh` extended with Stage 10 (SCP routing.sh) and Stage 11 (activate or --no-run)
+
+**Plans:** 2 plans
+- [x] 02-01-PLAN.md — scripts/routing.sh split-tunnel routing + NAT script (ROUT-01–04, NAT-01–03) ✓ 2026-05-20
+- [x] 02-02-PLAN.md — deploy.sh extended with Phase 2 stages (D-11 SCP routing.sh, D-12 --no-run flag) ✓ 2026-05-20
+
+**Phase 2 complete ✓**
 
 **Success Criteria:**
 1. `ip route show default` shows dev awg0
@@ -129,4 +138,4 @@
 
 ---
 *Created: 2026-05-18*
-*Updated: 2026-05-19 — Phase 1 plans added*
+*Updated: 2026-05-20 — Phase 2 plans complete (02-01 routing.sh, 02-02 deploy.sh Phase 2 extension)*
