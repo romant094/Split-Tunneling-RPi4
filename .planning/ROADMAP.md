@@ -1,7 +1,7 @@
 # Roadmap: RPi VPN Gateway
 
 **Created:** 2026-05-18
-**Phases:** 5
+**Phases:** 6
 **Requirements mapped:** 20/20 ✓
 
 ---
@@ -15,6 +15,7 @@
 | 3 | Autostart, Cron & Rollback | Survives reboots, daily refresh, one-command rollback | AUTO-01–03, ROLL-01–02, VRFY-01–04 | 4 |
 | 4 | Traffic Logging & Visibility | Per-connection route logging (VPN/ISP), subnets, domain names | TBD | TBD |
 | 5 | Custom Route Exceptions | Per-IP/domain overrides forcing traffic through ISP | TBD | TBD |
+| 6 | Documentation | Ops runbook: deploy, verify, rollback, add exceptions — one source of truth | TBD | TBD |
 
 ---
 
@@ -157,6 +158,16 @@ Plans:
 
 Plans:
 - [ ] TBD (run /gsd-plan-phase 5 to break down)
+
+### Phase 6: Documentation
+
+**Goal:** Ops runbook covering all phases — how to deploy, verify routing, rollback, add custom exceptions, and interpret traffic logs; each major script and workflow documented with examples
+**Requirements**: TBD
+**Depends on:** Phase 5
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 6 to break down)
 
 ---
 *Created: 2026-05-18*

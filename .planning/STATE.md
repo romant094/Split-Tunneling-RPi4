@@ -84,3 +84,4 @@ Status: Executing Phase 02
 ### Roadmap Evolution
 - Phase 4 added: Traffic Logging & Visibility — per-connection route logging (VPN/ISP), subnets, domain names
 - Phase 5 added: Custom Route Exceptions — per-IP/domain overrides forcing traffic through ISP
+- Phase 6 added: Documentation — ops runbook (deploy, verify, rollback, add exceptions)
