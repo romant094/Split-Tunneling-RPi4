@@ -201,7 +201,7 @@ fi
 echo "       awg binary: ${awg_path}"
 
 # Verify ip_forward = 1 (INST-02)
-ip_forward=$(ssh "$SSH_HOST" "sysctl -n net.ipv4.ip_forward")
+ip_forward=$(ssh "$SSH_HOST" "cat /proc/sys/net/ipv4/ip_forward")
 echo "       net.ipv4.ip_forward: ${ip_forward}"
 if [[ "$ip_forward" != "1" ]]; then
     echo "ERROR: net.ipv4.ip_forward is ${ip_forward} (expected 1) on ${SSH_HOST}" >&2
