@@ -25,7 +25,7 @@ Technology stack not yet documented. Will populate after codebase mapping or fir
 <!-- GSD:conventions-start source:CONVENTIONS.md -->
 ## Conventions
 
-Conventions not yet established. Will populate as patterns emerge during development.
+- **After every commit, immediately run `git push`.**
 <!-- GSD:conventions-end -->
 
 <!-- GSD:architecture-start source:ARCHITECTURE.md -->
