@@ -1,5 +1,11 @@
 {
   "model_profile": "balanced",
+  "models": {
+    "planning": "sonnet",
+    "research": "sonnet",
+    "execution": "sonnet",
+    "verification": "haiku"
+  },
   "commit_docs": true,
   "parallelization": false,
   "search_gitignored": false,
