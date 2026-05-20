@@ -78,3 +78,9 @@ Status: Executing Phase 02
 ---
 *Initialized: 2026-05-18*
 *Updated: 2026-05-20 — Plan 02-02 complete; deploy.sh extended with Phase 2 stages (D-11 SCP routing.sh, D-12 --no-run flag)*
+
+## Accumulated Context
+
+### Roadmap Evolution
+- Phase 4 added: Traffic Logging & Visibility — per-connection route logging (VPN/ISP), subnets, domain names
+- Phase 5 added: Custom Route Exceptions — per-IP/domain overrides forcing traffic through ISP

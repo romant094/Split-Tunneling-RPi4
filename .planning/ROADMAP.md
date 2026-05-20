@@ -1,7 +1,7 @@
 # Roadmap: RPi VPN Gateway
 
 **Created:** 2026-05-18
-**Phases:** 3
+**Phases:** 5
 **Requirements mapped:** 20/20 ✓
 
 ---
@@ -13,6 +13,8 @@
 | 1 | Foundation & Config | AmneziaWG running, config deployed | INST-01, INST-02, CONF-01, CONF-02 | 4 |
 | 2 | Routing & NAT | Split-tunnel routing active, LAN devices NATed through RPi | ROUT-01–04, NAT-01–03 | 6 |
 | 3 | Autostart, Cron & Rollback | Survives reboots, daily refresh, one-command rollback | AUTO-01–03, ROLL-01–02, VRFY-01–04 | 4 |
+| 4 | Traffic Logging & Visibility | Per-connection route logging (VPN/ISP), subnets, domain names | TBD | TBD |
+| 5 | Custom Route Exceptions | Per-IP/domain overrides forcing traffic through ISP | TBD | TBD |
 
 ---
 
@@ -135,6 +137,26 @@
 | VRFY-04 | Phase 3 |
 
 **20/20 requirements mapped. 0 unmapped. ✓**
+
+### Phase 4: Traffic Logging & Visibility
+
+**Goal:** Log per-connection routing decisions (VPN vs ISP), visible subnets, and resolved domain names
+**Requirements**: TBD
+**Depends on:** Phase 3
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 4 to break down)
+
+### Phase 5: Custom Route Exceptions
+
+**Goal:** Define per-IP and per-domain overrides that force traffic through ISP, bypassing the default VPN route
+**Requirements**: TBD
+**Depends on:** Phase 4
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 5 to break down)
 
 ---
 *Created: 2026-05-18*
