@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 3 context gathered
-last_updated: "2026-05-20T13:32:13.074Z"
+last_updated: "2026-05-20T15:11:32.660Z"
 progress:
-  total_phases: 3
+  total_phases: 6
   completed_phases: 2
-  total_plans: 4
+  total_plans: 7
   completed_plans: 4
-  percent: 67
+  percent: 33
 ---
 
 # State: RPi VPN Gateway
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 
 Goal: AmneziaWG installed, config deployed, IP forwarding on, tunnel operational
 
-Status: Executing Phase 02
+Status: Ready to execute
 
 ## Phase Progress
 
@@ -82,6 +82,7 @@ Status: Executing Phase 02
 ## Accumulated Context
 
 ### Roadmap Evolution
+
 - Phase 4 added: Traffic Logging & Visibility — per-connection route logging (VPN/ISP), subnets, domain names
 - Phase 5 added: Custom Route Exceptions — per-IP/domain overrides forcing traffic through ISP
 - Phase 6 added: Documentation — ops runbook (deploy, verify, rollback, add exceptions)

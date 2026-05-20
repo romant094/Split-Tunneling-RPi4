@@ -91,7 +91,7 @@
 **Requirements:**
 - AUTO-01: awg-quick@awg0 systemd service enabled
 - AUTO-02: vpn-routing.service enabled, starts after awg-quick@awg0
-- AUTO-03: /etc/cron.daily/update-vpn-routes runs routing.sh daily
+- AUTO-03: /etc/cron.d/vpn-routes runs /etc/update-vpn-routes daily at CRON_UPDATE_HOUR
 - ROLL-01: /etc/vpn-rollback.sh stops services, flushes routes, removes NAT/cron
 - ROLL-02: Rollback preserves awg0.conf, installed packages, routing.sh
 - VRFY-01: ip route get 8.8.8.8 → awg0
@@ -101,14 +101,20 @@
 
 **Deliverables:**
 - `systemd/vpn-routing.service` (deployed to /etc/systemd/system/)
-- `cron/update-vpn-routes` (deployed to /etc/cron.daily/)
+- `scripts/update-vpn-routes` (deployed to /etc/update-vpn-routes; cron entry at /etc/cron.d/vpn-routes)
 - `scripts/vpn-rollback.sh` (deployed to /etc/vpn-rollback.sh)
+- `deploy.sh` extended to 16 stages covering all Phase 3 artifacts
 
 **Success Criteria:**
 1. After simulated reboot: `systemctl is-active awg-quick@awg0` and `vpn-routing` both `active`
-2. `/etc/cron.daily/update-vpn-routes` is executable and runs without error
+2. `/etc/cron.d/vpn-routes` is mode 644 root:root and runs `/etc/update-vpn-routes` daily at 5:00
 3. `sudo /etc/vpn-rollback.sh` restores plain-host routing; `ip route show default` → via 192.168.1.1
 4. All VRFY checks pass before rollback
+
+**Plans:** 3 plans
+- [ ] 03-01-PLAN.md — vpn-routing.service unit file + deploy.sh Stages 12–13 (daemon-reload + systemctl enable AUTO-01, AUTO-02, VRFY-01..04)
+- [ ] 03-02-PLAN.md — scripts/update-vpn-routes (sha256 checksum cron script) + .env CRON_UPDATE_HOUR=5 + deploy.sh Stages 14–15 (AUTO-03)
+- [ ] 03-03-PLAN.md — scripts/vpn-rollback.sh + deploy.sh Stage 16 (ROLL-01, ROLL-02)
 
 ---
 
@@ -171,4 +177,4 @@ Plans:
 
 ---
 *Created: 2026-05-18*
-*Updated: 2026-05-20 — Phase 2 plans complete (02-01 routing.sh, 02-02 deploy.sh Phase 2 extension)*
+*Updated: 2026-05-20 — Phase 3 plans created (03-01 autostart, 03-02 cron, 03-03 rollback)*
