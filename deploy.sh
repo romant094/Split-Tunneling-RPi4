@@ -45,8 +45,11 @@ UPDATE_VPN_ROUTES_LOCAL="scripts/update-vpn-routes"
 UPDATE_VPN_ROUTES_REMOTE="/etc/update-vpn-routes"
 UPDATE_VPN_ROUTES_TMP="/tmp/update-vpn-routes.tmp"
 CRON_FILE_REMOTE="/etc/cron.d/vpn-routes"
+VPN_ROLLBACK_LOCAL="scripts/vpn-rollback.sh"
+VPN_ROLLBACK_REMOTE="/etc/vpn-rollback.sh"
+VPN_ROLLBACK_TMP="/tmp/vpn-rollback.sh.tmp"
 
-TOTAL_STAGES=15
+TOTAL_STAGES=16
 
 # ─── Argument Parsing (D-12) ─────────────────────────────────────────────────
 RUN_ROUTING=true
@@ -105,6 +108,10 @@ if [[ ! -f "$VPN_ROUTING_SERVICE_LOCAL" ]]; then
 fi
 if [[ ! -f "$UPDATE_VPN_ROUTES_LOCAL" ]]; then
     echo "ERROR: $UPDATE_VPN_ROUTES_LOCAL not found — run from the repo root" >&2
+    exit 1
+fi
+if [[ ! -f "$VPN_ROLLBACK_LOCAL" ]]; then
+    echo "ERROR: $VPN_ROLLBACK_LOCAL not found — run from the repo root" >&2
     exit 1
 fi
 
@@ -282,12 +289,18 @@ cron_line="0 ${CRON_UPDATE_HOUR} * * * root ${UPDATE_VPN_ROUTES_REMOTE} >> /var/
 printf '%s\n' "${cron_line}" | ssh -o BatchMode=yes "${SSH_HOST}" "sudo tee ${CRON_FILE_REMOTE} > /dev/null && sudo chmod 644 ${CRON_FILE_REMOTE} && sudo chown root:root ${CRON_FILE_REMOTE}"
 echo "       /etc/cron.d/vpn-routes installed (mode 644, root:root, runs daily at ${CRON_UPDATE_HOUR}:00)."
 
+# ─── Stage 16: Deploy vpn-rollback.sh to RPi (D-11, ROLL-01, ROLL-02) ──────────
+echo "[16/${TOTAL_STAGES}] Deploying vpn-rollback.sh to ${SSH_HOST}:${VPN_ROLLBACK_REMOTE}..."
+scp -o BatchMode=yes "${VPN_ROLLBACK_LOCAL}" "${SSH_HOST}:${VPN_ROLLBACK_TMP}"
+ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${VPN_ROLLBACK_TMP} ${VPN_ROLLBACK_REMOTE} && sudo chmod +x ${VPN_ROLLBACK_REMOTE} && sudo chown root:root ${VPN_ROLLBACK_REMOTE}"
+echo "       vpn-rollback.sh deployed (chmod +x, root:root)."
+
 # ─── Final Summary ───────────────────────────────────────────────────────────
 # Tunnel bring-up is NOT automated — RESEARCH.md Pitfall 5 (awg-quick up is not idempotent)
 # The commands below are printed for the developer to run manually.
 echo ""
 echo "================================================================"
-echo " Phase 1 + 2 + 3 (autostart + cron) deploy successful."
+echo " Phase 1 + 2 + 3 (autostart + cron + rollback) deploy successful."
 echo "================================================================"
 echo ""
 echo " Deployed:"
@@ -298,6 +311,7 @@ echo "   INST-02: net.ipv4.ip_forward = ${ip_forward}"
 echo "   ROUT-01..04 + NAT-01..03: ${ROUTING_SH_REMOTE} (chmod +x)"
 echo "   AUTO-01 + AUTO-02: vpn-routing.service + awg-quick@awg0 enabled at boot"
 echo "   AUTO-03: /etc/cron.d/vpn-routes (runs ${UPDATE_VPN_ROUTES_REMOTE} daily at ${CRON_UPDATE_HOUR}:00)"
+echo "   ROLL-01: ${VPN_ROLLBACK_REMOTE} (chmod +x, root:root)"
 echo ""
 echo " Next steps (run manually — tunnel bring-up is intentionally NOT automated):"
 echo ""
@@ -343,4 +357,9 @@ echo "   ssh pi4 \"sudo /etc/update-vpn-routes\""
 echo "   # one-off manual run; expect exit 0"
 echo "   ssh pi4 \"sudo journalctl -t vpn-routes -n 20 --no-pager\""
 echo "   # expect syslog entries from the manual run"
+echo ""
+echo " Rollback (when needed):"
+echo "   ssh pi4 \"sudo /etc/vpn-rollback.sh\""
+echo "   # After rollback: ip route show default → default via 192.168.1.1"
+echo "   # To re-activate: ./deploy.sh  (re-installs everything; awg0.conf preserved)"
 echo "================================================================"
