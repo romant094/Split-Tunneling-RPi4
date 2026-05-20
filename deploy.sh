@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# deploy.sh — macOS-side deploy orchestrator for RPi VPN Gateway (Phase 1)
+# deploy.sh — macOS-side deploy orchestrator for RPi VPN Gateway (Phase 1 + 2)
 #
 # Decisions honored:
 #   D-04: SSH_HOST=pi4 via system SSH config (no hardcoded IP)
@@ -9,16 +9,19 @@
 #   D-08: Variable names AWG_PRIVATE_KEY, AWG_PUBLIC_KEY, AWG_PRESHARED_KEY
 #   D-09: Reads .env.secrets, substitutes via sed pipeline, SCPs rendered config
 #   D-10: Key validation regex ^[A-Za-z0-9+/]{43}=$ enforced before any remote op
+#   D-11: routing.sh deployed via SCP to /tmp then sudo mv + chmod +x (Phase 2)
+#   D-12: --no-run flag skips routing.sh activation; without it, runs automatically
 #
 # Usage:
 #   1. Copy .env.secrets.example to .env.secrets and fill in your 44-char base64 keys
 #   2. Ensure ~/.ssh/config has a 'pi4' host alias (SSH key auth, user ar)
-#   3. Run: ./deploy.sh
+#   3. Run: ./deploy.sh [--no-run]
 #
 # This script deploys:
 #   - AmneziaWG (via scripts/install-awg.sh over SSH)
 #   - /etc/amnezia/amneziawg/awg0.conf (CONF-01, mode 0600 root:root)
 #   - /etc/vpn-gateway.env (CONF-02, mode 0644 root:root)
+#   - /etc/routing.sh (D-11, split-tunnel routing + NAT)
 #
 # After deploy completes, bring up the tunnel manually:
 #   ssh pi4 "sudo awg-quick up awg0"
@@ -32,8 +35,20 @@ TEMPLATE="amnezia.key.claude.txt"
 AWG_CONF_REMOTE="/etc/amnezia/amneziawg/awg0.conf"
 ENV_REMOTE="/etc/vpn-gateway.env"
 INSTALLER_SCRIPT="scripts/install-awg.sh"
+ROUTING_SH_LOCAL="scripts/routing.sh"
+ROUTING_SH_REMOTE="/etc/routing.sh"
+ROUTING_SH_TMP="/tmp/routing.sh"
 
-TOTAL_STAGES=9
+TOTAL_STAGES=11
+
+# ─── Argument Parsing (D-12) ─────────────────────────────────────────────────
+RUN_ROUTING=true
+for arg in "$@"; do
+  case "$arg" in
+    --no-run) RUN_ROUTING=false ;;
+    *) ;;
+  esac
+done
 
 # ─── Key Validation Function (D-10, RESEARCH.md Pattern 2) ─────────────────
 # Usage: validate_key <value> <name>
@@ -71,6 +86,10 @@ if [[ ! -f "$TEMPLATE" ]]; then
 fi
 if [[ ! -f "$INSTALLER_SCRIPT" ]]; then
     echo "ERROR: $INSTALLER_SCRIPT not found — run from the repo root" >&2
+    exit 1
+fi
+if [[ ! -f "$ROUTING_SH_LOCAL" ]]; then
+    echo "ERROR: $ROUTING_SH_LOCAL not found — run from the repo root" >&2
     exit 1
 fi
 
@@ -192,13 +211,32 @@ fi
 
 echo "       All post-deploy checks passed."
 
-# ─── Stage J: Final message ──────────────────────────────────────────────────
+# ─── Stage J: Phase 1 complete (pipeline continues to Phase 2) ──────────────
+echo "[9/${TOTAL_STAGES}] Phase 1 deploy complete."
+echo "       AmneziaWG installed, awg0.conf and vpn-gateway.env deployed."
+
+# ─── Stage 10: Deploy routing.sh to RPi (D-11) ──────────────────────────────
+echo "[10/${TOTAL_STAGES}] Deploying routing.sh to ${SSH_HOST}:${ROUTING_SH_REMOTE}..."
+scp -o BatchMode=yes "${ROUTING_SH_LOCAL}" "${SSH_HOST}:${ROUTING_SH_TMP}"
+ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${ROUTING_SH_TMP} ${ROUTING_SH_REMOTE} && sudo chmod +x ${ROUTING_SH_REMOTE}"
+echo "       routing.sh deployed to ${ROUTING_SH_REMOTE} (chmod +x)"
+
+# ─── Stage 11: Activate routing.sh (unless --no-run) (D-12) ─────────────────
+if [ "${RUN_ROUTING}" = "true" ]; then
+  echo "[11/${TOTAL_STAGES}] Activating routing.sh on ${SSH_HOST}..."
+  ssh -o BatchMode=yes "${SSH_HOST}" "sudo ${ROUTING_SH_REMOTE}"
+  echo "       routing.sh activation complete — split-tunnel active"
+else
+  echo "[11/${TOTAL_STAGES}] Skipping routing.sh activation (--no-run). Run manually:"
+  echo "       ssh ${SSH_HOST} \"sudo ${ROUTING_SH_REMOTE}\""
+fi
+
+# ─── Final Summary ───────────────────────────────────────────────────────────
 # Tunnel bring-up is NOT automated — RESEARCH.md Pitfall 5 (awg-quick up is not idempotent)
 # The commands below are printed for the developer to run manually.
-echo "[9/${TOTAL_STAGES}] Deploy complete."
 echo ""
 echo "================================================================"
-echo " Phase 1 deploy successful."
+echo " Phase 1 + 2 deploy successful."
 echo "================================================================"
 echo ""
 echo " Deployed:"
@@ -206,6 +244,7 @@ echo "   CONF-01: ${AWG_CONF_REMOTE} (mode 0600, root:root)"
 echo "   CONF-02: ${ENV_REMOTE}  (mode 0644, root:root)"
 echo "   INST-01: awg binary present at ${awg_path}"
 echo "   INST-02: net.ipv4.ip_forward = ${ip_forward}"
+echo "   ROUT-01..04 + NAT-01..03: ${ROUTING_SH_REMOTE} (chmod +x)"
 echo ""
 echo " Next steps (run manually — tunnel bring-up is intentionally NOT automated):"
 echo ""
@@ -224,4 +263,14 @@ echo ""
 echo "   # Confirm IP forwarding persists (after reboot):"
 echo "   ssh pi4 \"sysctl net.ipv4.ip_forward\""
 echo "   # Expected: net.ipv4.ip_forward = 1"
+echo ""
+echo " Phase 2 verification (run on RPi):"
+echo "   ip route show default                            # expect dev awg0"
+echo "   ip route get 84.32.100.60                       # expect via 192.168.1.1 (ISP)"
+echo "   ip route get 77.88.8.8                          # expect via 192.168.1.1 (RU -> ISP)"
+echo "   ip route get 8.8.8.8                            # expect dev awg0 (foreign -> VPN)"
+echo "   sudo iptables -t nat -L POSTROUTING -n -v       # expect MASQUERADE on awg0 + eth0"
+echo ""
+echo " If --no-run was used, activate routing manually:"
+echo "   ssh pi4 \"sudo /etc/routing.sh\""
 echo "================================================================"
