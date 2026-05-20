@@ -11,7 +11,7 @@
 | # | Phase | Goal | Requirements | Success Criteria |
 |---|-------|------|--------------|------------------|
 | 1 | Foundation & Config | AmneziaWG running, config deployed | INST-01, INST-02, CONF-01, CONF-02 | 4 |
-| 2 | Routing & NAT | Split-tunnel active, LAN NATed, rules persistent | ROUT-01–04, NAT-01–03 | 6 |
+| 2 | Routing & NAT | 1/2 | In Progress|  |
 | 3 | Autostart, Cron & Rollback | Survives reboots, daily refresh, one-command rollback | AUTO-01–03, ROLL-01–02, VRFY-01–04 | 4 |
 
 ---

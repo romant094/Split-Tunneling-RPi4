@@ -17,16 +17,16 @@
 
 ### Routing
 
-- [ ] **ROUT-01**: `/etc/routing.sh` downloads RU subnet list and applies split routes
-- [ ] **ROUT-02**: routing.sh is idempotent (safe to re-run without errors)
-- [ ] **ROUT-03**: routing.sh adds host route for VPN server (84.32.100.60) via ISP (prevents tunnel loop)
-- [ ] **ROUT-04**: routing.sh sets default route via awg0
+- [x] **ROUT-01**: `/etc/routing.sh` downloads RU subnet list and applies split routes
+- [x] **ROUT-02**: routing.sh is idempotent (safe to re-run without errors)
+- [x] **ROUT-03**: routing.sh adds host route for VPN server (84.32.100.60) via ISP (prevents tunnel loop)
+- [x] **ROUT-04**: routing.sh sets default route via awg0
 
 ### NAT
 
-- [ ] **NAT-01**: iptables masquerade on awg0 (VPN-bound LAN traffic)
-- [ ] **NAT-02**: iptables masquerade on eth0 (ISP-bound LAN traffic)
-- [ ] **NAT-03**: iptables rules survive reboot (iptables-persistent)
+- [x] **NAT-01**: iptables masquerade on awg0 (VPN-bound LAN traffic)
+- [x] **NAT-02**: iptables masquerade on eth0 (ISP-bound LAN traffic)
+- [x] **NAT-03**: iptables rules survive reboot (iptables-persistent)
 
 ### Autostart
 
@@ -77,13 +77,13 @@
 | INST-02 | Phase 1 | Complete (01-01) |
 | CONF-01 | Phase 1 | Pending |
 | CONF-02 | Phase 1 | Pending |
-| ROUT-01 | Phase 2 | Pending |
-| ROUT-02 | Phase 2 | Pending |
-| ROUT-03 | Phase 2 | Pending |
-| ROUT-04 | Phase 2 | Pending |
-| NAT-01 | Phase 2 | Pending |
-| NAT-02 | Phase 2 | Pending |
-| NAT-03 | Phase 2 | Pending |
+| ROUT-01 | Phase 2 | Complete |
+| ROUT-02 | Phase 2 | Complete |
+| ROUT-03 | Phase 2 | Complete |
+| ROUT-04 | Phase 2 | Complete |
+| NAT-01 | Phase 2 | Complete |
+| NAT-02 | Phase 2 | Complete |
+| NAT-03 | Phase 2 | Complete |
 | AUTO-01 | Phase 3 | Pending |
 | AUTO-02 | Phase 3 | Pending |
 | AUTO-03 | Phase 3 | Pending |
