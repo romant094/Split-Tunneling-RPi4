@@ -309,17 +309,19 @@ scp -o BatchMode=yes "${VPN_ROLLBACK_LOCAL}" "${SSH_HOST}:${VPN_ROLLBACK_TMP}"
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${VPN_ROLLBACK_TMP} ${VPN_ROLLBACK_REMOTE} && sudo chmod +x ${VPN_ROLLBACK_REMOTE} && sudo chown root:root ${VPN_ROLLBACK_REMOTE}"
 echo "       vpn-rollback.sh deployed (chmod +x, root:root)."
 
-# ─── Stage 17: Deploy dnsmasq.conf to RPi (D-18) ────────────────────────────
-echo "[17/${TOTAL_STAGES}] Deploying dnsmasq.conf to ${SSH_HOST}:${DNSMASQ_CONF_REMOTE}..."
-scp -o BatchMode=yes "${DNSMASQ_CONF_LOCAL}" "${SSH_HOST}:${DNSMASQ_CONF_TMP}"
-ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${DNSMASQ_CONF_TMP} ${DNSMASQ_CONF_REMOTE} && sudo chmod 644 ${DNSMASQ_CONF_REMOTE} && sudo chown root:root ${DNSMASQ_CONF_REMOTE}"
-echo "       dnsmasq.conf deployed (mode 644, root:root)."
-
-# ─── Stage 18: Ensure dnsmasq is installed and enabled (D-18) ───────────────
-echo "[18/${TOTAL_STAGES}] Ensuring dnsmasq is installed and enabled on ${SSH_HOST}..."
+# ─── Stage 17: Ensure dnsmasq is installed (D-18) ───────────────────────────
+# Install BEFORE deploying config — apt ships its own /etc/dnsmasq.conf and would
+# prompt interactively if our config is already at that path when the package lands.
+echo "[17/${TOTAL_STAGES}] Ensuring dnsmasq is installed on ${SSH_HOST}..."
 ssh -o BatchMode=yes "${SSH_HOST}" "if ! dpkg -l dnsmasq 2>/dev/null | grep -q '^ii'; then sudo DEBIAN_FRONTEND=noninteractive apt-get install -y dnsmasq; fi"
-ssh -o BatchMode=yes "${SSH_HOST}" "sudo systemctl enable --now dnsmasq"
-echo "       dnsmasq installed and enabled."
+echo "       dnsmasq installed (or already present)."
+
+# ─── Stage 18: Deploy dnsmasq.conf to RPi (D-18) ────────────────────────────
+# Overwrite package default with our config now that the package is installed.
+echo "[18/${TOTAL_STAGES}] Deploying dnsmasq.conf to ${SSH_HOST}:${DNSMASQ_CONF_REMOTE}..."
+scp -o BatchMode=yes "${DNSMASQ_CONF_LOCAL}" "${SSH_HOST}:${DNSMASQ_CONF_TMP}"
+ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${DNSMASQ_CONF_TMP} ${DNSMASQ_CONF_REMOTE} && sudo chmod 644 ${DNSMASQ_CONF_REMOTE} && sudo chown root:root ${DNSMASQ_CONF_REMOTE} && sudo systemctl enable --now dnsmasq"
+echo "       dnsmasq.conf deployed (mode 644, root:root); dnsmasq enabled and started."
 
 # ─── Stage 19: Deploy vpn-status.sh to RPi (D-19) ───────────────────────────
 echo "[19/${TOTAL_STAGES}] Deploying vpn-status.sh to ${SSH_HOST}:${VPN_STATUS_REMOTE}..."
@@ -403,8 +405,18 @@ echo "   ssh pi4 \"sudo /etc/vpn-rollback.sh\""
 echo "   # After rollback: ip route show default → default via 192.168.1.1"
 echo "   # To re-activate: ./deploy.sh  (re-installs everything; awg0.conf preserved)"
 echo ""
-echo " Phase 4 connection visibility:"
-echo "   # Check recent connections:"
+echo " Phase 4 verification:"
+echo "   ssh pi4 \"sudo iptables -L FORWARD -n -v | grep LOG\""
+echo "   # expect: two LOG rules — [VPN] on awg0, [ISP] on eth0"
+echo "   ssh pi4 \"sudo systemctl is-active dnsmasq\""
+echo "   # expect: active"
 echo "   ssh pi4 \"sudo /etc/vpn-status.sh\""
-echo "   ssh pi4 \"sudo /etc/vpn-status.sh --filter=steam --last=100\""
+echo "   # expect: table header + connection rows (generate LAN traffic first)"
+echo "   ssh pi4 \"sudo journalctl -k -n 20 --no-pager | grep -E '\[VPN\]|\[ISP\]'\""
+echo "   # expect: kernel lines with SRC= DST= and [VPN] or [ISP] prefix"
+echo "   # Idempotency check (must not duplicate LOG rules):"
+echo "   ssh pi4 \"sudo /etc/routing.sh --no-update && sudo iptables -L FORWARD -n -v | grep -c LOG\""
+echo "   # expect: 2"
+echo "   # Keenetic manual step: Home network -> Segments -> DNS server -> 192.168.1.254"
+echo "   # Without this dnsmasq won't receive queries and domain column shows raw IPs"
 echo "================================================================"
