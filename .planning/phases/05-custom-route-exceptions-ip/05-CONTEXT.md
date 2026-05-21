@@ -9,16 +9,16 @@
 Add user-defined ISP bypass exceptions to the RPi VPN gateway:
 
 1. **File rename** — `/etc/vpn-ru-subnets.txt` → `/etc/white-list.txt` (updated in routing.sh constant and all references)
-2. **white-list-extended.txt** — New file at `/etc/white-list-extended.txt` on RPi (one CIDR per line, same format as white-list.txt from iplist). Deployed from `config/white-list-extended.txt` in repo (gitignored). If absent, routing.sh skips silently. Example template `config/white-list-extended.txt.example` committed to repo (not deployed).
+2. **white-list-extended.txt** — New file at `/etc/white-list-extended.txt` on RPi (one CIDR per line, same format as white-list.txt from iplist). Deployed from `configs/white-list-extended.txt` in repo (gitignored). If absent, routing.sh skips silently. Example template `configs/white-list-extended.txt.example` committed to repo (not deployed).
 3. **routing.sh extended** — After loading RU subnets (white-list.txt), also load white-list-extended.txt if present and add each CIDR via KEENETIC_GW. Same flush-and-rebuild idempotency pattern.
 4. **vpn-status.sh extended** — New `--via=vpn` / `--via=isp` flags to filter output by routing decision. Composable with existing `--filter`, `--device`, `--last` flags.
-5. **Deploy integration** — deploy.sh gets a new stage: deploy `config/white-list-extended.txt` → `/etc/white-list-extended.txt` (skip stage if file is absent from repo).
+5. **Deploy integration** — deploy.sh gets a new stage: deploy `configs/white-list-extended.txt` → `/etc/white-list-extended.txt` (skip stage if file is absent from repo).
 
 Phase ends when: `routing.sh` loads white-list-extended.txt alongside white-list.txt; `vpn-status.sh --via=vpn` shows only VPN-routed connections; a CIDR in white-list-extended.txt routes via ISP after deploy+routing.sh run.
 
 **Workflow (discovery → exception):**
 1. SSH to RPi; run `sudo vpn-status.sh --via=vpn` to identify IPs going through VPN
-2. Add desired CIDRs to `config/white-list-extended.txt` locally
+2. Add desired CIDRs to `configs/white-list-extended.txt` locally
 3. Deploy via `./deploy.sh`
 4. Routing applies automatically (deploy.sh runs routing.sh after deploy)
 
@@ -31,7 +31,7 @@ Phase ends when: `routing.sh` loads white-list-extended.txt alongside white-list
 - **D-01:** IP/CIDR only — no domain-based exceptions. No ipset, no dnsmasq --ipset. Domain names are resolved manually by the user before adding as CIDRs.
 - **D-02:** Format: one CIDR per line, identical to iplist output (no labels, no comments). Consistent with white-list.txt.
 - **D-03:** Deployed path: `/etc/white-list-extended.txt` (next to `/etc/white-list.txt`).
-- **D-04:** Repo path: `config/white-list-extended.txt` (gitignored). Example file: `config/white-list-extended.txt.example` (committed, not deployed).
+- **D-04:** Repo path: `configs/white-list-extended.txt` (gitignored). Example file: `configs/white-list-extended.txt.example` (committed, not deployed). *(Updated: user confirmed `configs/` over `config/` to match existing repo layout.)*
 - **D-05:** If `/etc/white-list-extended.txt` absent at routing.sh run time → skip silently, no error.
 
 ### File Rename
@@ -47,7 +47,7 @@ Phase ends when: `routing.sh` loads white-list-extended.txt alongside white-list
 - **D-11:** `--via` is composable with existing `--filter`, `--device`, `--last` flags. No mutual exclusion.
 
 ### Deploy Integration
-- **D-12:** deploy.sh gets one new stage: check if `config/white-list-extended.txt` exists in repo; if yes, SCP to `/tmp/white-list-extended.tmp` → `sudo mv` → `sudo chmod 644`. If file absent, log skip and continue.
+- **D-12:** deploy.sh gets one new stage: check if `configs/white-list-extended.txt` exists in repo; if yes, SCP to `/tmp/white-list-extended.tmp` → `sudo mv` → `sudo chmod 644`. If file absent, log skip and continue.
 - **D-13:** Stage executes before routing.sh activation stage (so exceptions are in place when routing.sh runs).
 
 ### Rollback
@@ -73,7 +73,7 @@ Phase ends when: `routing.sh` loads white-list-extended.txt alongside white-list
 
 ### Config / Data Files
 - `.env` — confirm no new env vars needed (exception file paths are hardcoded constants, not env vars)
-- `.gitignore` — add `config/white-list-extended.txt` entry
+- `.gitignore` — add `configs/white-list-extended.txt` entry
 
 ### Phase Context (prior decisions)
 - `.planning/phases/02-routing-nat/02-CONTEXT.md` — D-07 (iptables idempotency), D-06 (flush-and-rebuild), D-01 (main routing table only)
@@ -109,7 +109,7 @@ No ADRs or external specs — requirements fully captured in decisions above.
 ## Specific Ideas
 
 - Discovery workflow: `sudo vpn-status.sh --via=vpn` on RPi to see what's going through VPN; copy destination IPs to `config/white-list-extended.txt` locally; `./deploy.sh` to apply.
-- `config/white-list-extended.txt.example` should show realistic format: 2-3 example CIDRs from common services (Steam, game server ranges) with a header comment explaining the file.
+- `configs/white-list-extended.txt.example` should show realistic format: 2-3 example CIDRs from common services (Steam, game server ranges) with a header comment explaining the file.
 - Rename `/etc/vpn-ru-subnets.txt` → `/etc/white-list.txt` makes both files semantically parallel: both are "whitelists" (ISP bypass); one is auto-populated (from iplist), one is user-defined.
 
 </specifics>

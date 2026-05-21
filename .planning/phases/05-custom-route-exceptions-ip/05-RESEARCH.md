@@ -384,21 +384,26 @@ EXCEPTIONS_FILE="/etc/white-list-extended.txt"
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All three open questions raised during research have been resolved during planning (Plans 05-01 and 05-02) and via user confirmation in CONTEXT.md D-04.
 
 1. **`config/` vs `configs/` directory name**
    - What we know: CONTEXT.md D-04 says `config/white-list-extended.txt`. Repo uses `configs/dnsmasq.conf`.
    - What's unclear: Is `config/` intentional (a separate new directory for user-editable files) or was it a typo for `configs/`?
    - Recommendation: Planner should use `configs/` (consistent with existing convention) unless user explicitly chose `config/`. If `configs/` is used, update deploy.sh variable `WHITE_LIST_EXT_LOCAL="configs/white-list-extended.txt"`. The `.gitignore` entry must match the chosen path.
+   - **RESOLVED:** Use `configs/` (plural). User updated CONTEXT.md D-04 to confirm `configs/` matches the existing repo layout (where `configs/dnsmasq.conf` already lives). Plan 05-02 implements `configs/white-list-extended.txt` and `configs/white-list-extended.txt.example`; `.gitignore` ignores `configs/white-list-extended.txt`.
 
 2. **deploy.sh Stage N ordering: before or after Stage 16 (rollback script)?**
    - CONTEXT.md D-13 says "before routing.sh activation stage" but D-Claude says "before or after rollback script stage" is discretionary.
    - Recommendation: Insert exception file stage as Stage 17 (after vpn-rollback.sh Stage 16, before dnsmasq Stage 17 which shifts to 18). This preserves the logical order: deploy all scripts → deploy all data files → activate.
    - TOTAL_STAGES: 21 → 22.
+   - **RESOLVED:** Exception file deploy lands as Stage 21 in Plan 05-02 — inserted between Stage 20 (watch-routes.py) and the existing final routing.sh activation stage (which is renumbered to Stage 22). This satisfies D-13 ("before routing.sh activation stage") and keeps the new stage adjacent to the other data-file/script deploys at the end of the stage list. TOTAL_STAGES: 21 → 22.
 
 3. **First-deploy `--no-update` concern**
    - What we know: deploy.sh final activation (Stage 21) runs `routing.sh --no-update`. After Phase 5 update, routing.sh expects `/etc/white-list.txt` but RPi may only have `/etc/vpn-ru-subnets.txt`.
    - Recommendation: Change Stage 21 to run `routing.sh` (without `--no-update`) for the Phase 5 activation, ensuring fresh download to the new path. Or add a pre-check that renames the old file. Document this in the plan's verification steps.
+   - **RESOLVED:** Plan 05-02 Task 3 removes `--no-update` from the final activation stage so routing.sh performs a fresh download to `/etc/white-list.txt` on first deploy after the rename. The daily cron path (update-vpn-routes) still does its own download into /tmp before invoking `routing.sh --no-update`, so the cron flow is unaffected. Net effect: one extra download per operator-initiated `./deploy.sh` run — accepted in threat row T-05-09 of Plan 02.
 
 ---
 

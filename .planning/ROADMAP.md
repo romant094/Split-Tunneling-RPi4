@@ -25,23 +25,27 @@
 **Mode:** mvp
 
 **Requirements:**
+
 - INST-01: AmneziaWG installed; `awg` binary available
 - INST-02: IP forwarding enabled persistently (sysctl)
 - CONF-01: awg0.conf deployed to /etc/amnezia/amneziawg/
 - CONF-02: /etc/vpn-gateway.env deployed on RPi
 
 **Deliverables:**
+
 - `deploy.sh` — deploys configs to RPi via SSH/SCP
 - awg0.conf on RPi (from amnezia.key.claude.txt template + user keys)
 - /etc/vpn-gateway.env on RPi
 
 **Success Criteria:**
+
 1. `which awg` returns a path on RPi
 2. `sysctl net.ipv4.ip_forward` returns 1 and persists after reboot
 3. awg0.conf present at /etc/amnezia/amneziawg/awg0.conf on RPi
 4. `sudo awg-quick up awg0` succeeds; `sudo awg show` shows peer handshake
 
 **Plans:** 2 plans
+
 - [x] 01-01-PLAN.md — RPi-side AmneziaWG installer + persistent IP forwarding (INST-01, INST-02) ✓ 2026-05-19
 - [x] 01-02-PLAN.md — deploy.sh orchestrator + secrets hygiene + awg0.conf and vpn-gateway.env deployment (CONF-01, CONF-02; wires INST-01, INST-02 via Plan 01) ✓ 2026-05-19
 
@@ -55,6 +59,7 @@
 **Mode:** mvp
 
 **Requirements:**
+
 - ROUT-01: /etc/routing.sh downloads RU subnets and applies split routes
 - ROUT-02: routing.sh is idempotent (safe to re-run)
 - ROUT-03: routing.sh adds host route for VPN server via ISP (prevents loop)
@@ -64,16 +69,19 @@
 - NAT-03: iptables rules survive reboot (iptables-persistent)
 
 **Deliverables:**
+
 - `scripts/routing.sh` (deployed to /etc/routing.sh)
 - `deploy.sh` extended with Stage 10 (SCP routing.sh) and Stage 11 (activate or --no-run)
 
 **Plans:** 2 plans
+
 - [x] 02-01-PLAN.md — scripts/routing.sh split-tunnel routing + NAT script (ROUT-01–04, NAT-01–03) ✓ 2026-05-20
 - [x] 02-02-PLAN.md — deploy.sh extended with Phase 2 stages (D-11 SCP routing.sh, D-12 --no-run flag) ✓ 2026-05-20
 
 **Phase 2 complete ✓**
 
 **Success Criteria:**
+
 1. `ip route show default` shows dev awg0
 2. `ip route get 84.32.100.60` → via 192.168.1.1 (not awg0)
 3. `ip route get 77.88.8.8` → via 192.168.1.1 (RU → ISP)
@@ -89,6 +97,7 @@
 **Mode:** mvp
 
 **Requirements:**
+
 - AUTO-01: awg-quick@awg0 systemd service enabled
 - AUTO-02: vpn-routing.service enabled, starts after awg-quick@awg0
 - AUTO-03: /etc/cron.d/vpn-routes runs /etc/update-vpn-routes daily at CRON_UPDATE_HOUR
@@ -100,18 +109,21 @@
 - VRFY-04: curl --interface awg0 https://ifconfig.me returns VPN IP
 
 **Deliverables:**
+
 - `systemd/vpn-routing.service` (deployed to /etc/systemd/system/)
 - `scripts/update-vpn-routes` (deployed to /etc/update-vpn-routes; cron entry at /etc/cron.d/vpn-routes)
 - `scripts/vpn-rollback.sh` (deployed to /etc/vpn-rollback.sh)
 - `deploy.sh` extended to 16 stages covering all Phase 3 artifacts
 
 **Success Criteria:**
+
 1. After simulated reboot: `systemctl is-active awg-quick@awg0` and `vpn-routing` both `active`
 2. `/etc/cron.d/vpn-routes` is mode 644 root:root and runs `/etc/update-vpn-routes` daily at 5:00
 3. `sudo /etc/vpn-rollback.sh` restores plain-host routing; `ip route show default` → via 192.168.1.1
 4. All VRFY checks pass before rollback
 
 **Plans:** 3 plans
+
 - [x] 03-01-PLAN.md — vpn-routing.service unit file + deploy.sh Stages 12–13 (daemon-reload + systemctl enable AUTO-01, AUTO-02, VRFY-01..04) ✓ 2026-05-20
 - [x] 03-02-PLAN.md — scripts/update-vpn-routes (sha256 checksum cron script) + .env CRON_UPDATE_HOUR=5 + deploy.sh Stages 14–15 (AUTO-03) ✓ 2026-05-20
 - [x] 03-03-PLAN.md — scripts/vpn-rollback.sh + deploy.sh Stage 16 (ROLL-01, ROLL-02) ✓ 2026-05-20
@@ -155,13 +167,16 @@
 **Plans:** 3/3 plans complete
 
 **Wave 1:**
+
 - [x] 04-01-PLAN.md — iptables LOG rules in scripts/routing.sh ([VPN]/[ISP] on FORWARD chain, --state NEW, rate limited)
 - [x] 04-02-PLAN.md — configs/dnsmasq.conf + scripts/vpn-status.sh (connection visibility query tool)
 
 **Wave 2** *(blocked on Wave 1 completion)*:
+
 - [x] 04-03-PLAN.md — deploy.sh Stages 17–20 + vpn-rollback.sh Phase 4 teardown (completed 2026-05-21)
 
 **Cross-cutting constraints:**
+
 - iptables LOG rule flag sets must be identical in routing.sh (add) and vpn-rollback.sh (remove)
 
 ### Phase 5: Custom Route Exceptions
@@ -172,7 +187,12 @@
 **Plans:** 2 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 05-01-PLAN.md — Wave 1: routing.sh rename SUBNET_FILE → WHITE_LIST_FILE + Stage 5b loader for /etc/white-list-extended.txt; update-vpn-routes path rename; vpn-rollback.sh rm white-list-extended + summary rename (D-06, D-07, D-08, D-09, D-14)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 05-02-PLAN.md — Wave 2: vpn-status.sh --via=vpn|isp filter (D-10, D-11); deploy.sh new conditional stage for configs/white-list-extended.txt (D-12, D-13); configs/white-list-extended.txt.example committed; .gitignore the user file; drop --no-update from final activation (Pitfall 2 fix)
 
 ### Phase 6: Documentation
@@ -183,6 +203,7 @@ Plans:
 **Plans:** 0 plans
 
 Plans:
+
 - [ ] TBD (run /gsd-plan-phase 6 to break down)
 
 ---
