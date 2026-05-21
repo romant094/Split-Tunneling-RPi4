@@ -8,13 +8,14 @@
 #
 # Decisions honored:
 #   D-01 — Routes go into the main routing table (no custom policy tables, no ip rule)
-#   D-02 — RU subnets saved to /etc/vpn-ru-subnets.txt (one CIDR per line)
+#   D-02 — RU subnets saved to /etc/white-list.txt (one CIDR per line)
 #   D-03 — Always attempts fresh download from $RU_SUBNET_URL on each run
 #   D-04 — Download failure fallback: use existing file if present; abort if missing
-#   D-05 — --no-update flag: skip download, use existing /etc/vpn-ru-subnets.txt
+#   D-05 — --no-update flag: skip download, use existing /etc/white-list.txt
 #   D-06 — Flush-and-rebuild: delete all awg0 routes + VPN server host route, then rebuild
 #   D-07 — iptables idempotency: iptables -C check before every iptables -A
 #   D-08 — Single script: download, flush, routes, NAT, iptables-persistent (all in one)
+#   D-08(P5) — Stage 5b loads /etc/white-list-extended.txt if present (silent skip if absent)
 #   D-09 — Default route via awg0 set by this script (ROUT-04)
 #   D-10 — NAT iptables rules configured inside this script (NAT-01, NAT-02)
 #
@@ -34,7 +35,8 @@
 set -euo pipefail
 
 # ─── Constants ────────────────────────────────────────────────────────────────
-SUBNET_FILE="/etc/vpn-ru-subnets.txt"
+WHITE_LIST_FILE="/etc/white-list.txt"
+EXCEPTIONS_FILE="/etc/white-list-extended.txt"
 SUBNET_TMP="/tmp/ru-subnets.tmp"
 IPTABLES_RULES="/etc/iptables/rules.v4"
 
@@ -74,25 +76,25 @@ log "  LAN_SUBNET:   ${LAN_SUBNET}"
 # ─── Stage 1: Download RU subnet list (D-03, D-04, D-05, ROUT-01) ────────────
 # D-05: skip download if --no-update flag is passed
 if [[ "$SKIP_DOWNLOAD" == true ]]; then
-    log "Stage 1: Skipping download (--no-update), using existing ${SUBNET_FILE}"
-    if [[ ! -f "${SUBNET_FILE}" ]]; then
-        err "--no-update passed but ${SUBNET_FILE} does not exist — cannot continue"
+    log "Stage 1: Skipping download (--no-update), using existing ${WHITE_LIST_FILE}"
+    if [[ ! -f "${WHITE_LIST_FILE}" ]]; then
+        err "--no-update passed but ${WHITE_LIST_FILE} does not exist — cannot continue"
         exit 1
     fi
 else
     log "Stage 1: Downloading RU subnet list from ${RU_SUBNET_URL}"
-    # T-02-01: Download to temp file first; mv to SUBNET_FILE only on success.
+    # T-02-01: Download to temp file first; mv to WHITE_LIST_FILE only on success.
     # This prevents a partial/corrupt download from replacing a good existing file.
     if curl -fsSL "${RU_SUBNET_URL}" -o "${SUBNET_TMP}"; then
-        mv "${SUBNET_TMP}" "${SUBNET_FILE}"
-        log "Subnet list downloaded and saved to ${SUBNET_FILE}"
+        mv "${SUBNET_TMP}" "${WHITE_LIST_FILE}"
+        log "Subnet list downloaded and saved to ${WHITE_LIST_FILE}"
     else
         # D-04: if download fails, use existing file as fallback; abort if missing
         rm -f "${SUBNET_TMP}"
-        if [[ -f "${SUBNET_FILE}" ]]; then
-            log "WARNING: Download failed — continuing with existing ${SUBNET_FILE} (D-04 fallback)"
+        if [[ -f "${WHITE_LIST_FILE}" ]]; then
+            log "WARNING: Download failed — continuing with existing ${WHITE_LIST_FILE} (D-04 fallback)"
         else
-            err "Download failed AND ${SUBNET_FILE} does not exist — cannot continue (D-04 abort)"
+            err "Download failed AND ${WHITE_LIST_FILE} does not exist — cannot continue (D-04 abort)"
             exit 1
         fi
     fi
@@ -100,16 +102,16 @@ fi
 
 # ─── Stage 2: Validate subnet file ───────────────────────────────────────────
 log "Stage 2: Validating subnet file..."
-if [[ ! -f "${SUBNET_FILE}" ]]; then
-    err "${SUBNET_FILE} does not exist after Stage 1 — aborting"
+if [[ ! -f "${WHITE_LIST_FILE}" ]]; then
+    err "${WHITE_LIST_FILE} does not exist after Stage 1 — aborting"
     exit 1
 fi
-if [[ ! -s "${SUBNET_FILE}" ]]; then
-    err "${SUBNET_FILE} is empty — aborting to avoid wiping all routes"
+if [[ ! -s "${WHITE_LIST_FILE}" ]]; then
+    err "${WHITE_LIST_FILE} is empty — aborting to avoid wiping all routes"
     exit 1
 fi
-SUBNET_COUNT=$(grep -c . "${SUBNET_FILE}" || true)
-log "Subnet file valid: ${SUBNET_COUNT} lines in ${SUBNET_FILE}"
+WHITE_LIST_COUNT=$(grep -c . "${WHITE_LIST_FILE}" || true)
+log "Subnet file valid: ${WHITE_LIST_COUNT} lines in ${WHITE_LIST_FILE}"
 
 # ─── Stage 3: Flush existing routes (D-06, ROUT-02) ─────────────────────────
 # Flush-and-rebuild gives a clean slate on every run.
@@ -155,8 +157,27 @@ while IFS= read -r subnet; do
     [[ "${subnet}" =~ ^[[:space:]]*# ]] && continue
     ip route add "${subnet}" via "${KEENETIC_GW}" 2>/dev/null || true
     (( ADDED++ )) || true
-done < "${SUBNET_FILE}"
+done < "${WHITE_LIST_FILE}"
 log "RU subnet routes added: ${ADDED} routes via ${KEENETIC_GW}"
+
+# ─── Stage 5b: Load exception CIDRs from EXCEPTIONS_FILE (D-05, D-08(P5)) ────
+# If /etc/white-list-extended.txt is present, add each CIDR via KEENETIC_GW.
+# Absence of the file is a normal state — skip silently with a log message (D-05).
+# T-05-01: CIDRs passed as args to ip route add — no eval; malformed entries
+#          suppressed by 2>/dev/null || true (same trust model as Stage 5 T-02-02).
+EX_ADDED=0
+if [[ -f "${EXCEPTIONS_FILE}" ]]; then
+    log "Stage 5b: Loading exception CIDRs from ${EXCEPTIONS_FILE}..."
+    while IFS= read -r subnet; do
+        [[ -z "${subnet}" ]] && continue
+        [[ "${subnet}" =~ ^[[:space:]]*# ]] && continue
+        ip route add "${subnet}" via "${KEENETIC_GW}" 2>/dev/null || true
+        (( EX_ADDED++ )) || true
+    done < "${EXCEPTIONS_FILE}"
+    log "Exception routes added: ${EX_ADDED} routes via ${KEENETIC_GW}"
+else
+    log "Stage 5b: ${EXCEPTIONS_FILE} not found — no exception routes loaded (D-05)"
+fi
 
 # ─── Stage 6: Set default route via VPN (ROUT-04, D-09) ─────────────────────
 # All non-RU traffic exits through the VPN tunnel.
@@ -273,6 +294,7 @@ log "routing.sh complete — split-tunnel active"
 log "  VPN interface:   ${VPN_IFACE}"
 log "  VPN server:      ${VPN_SERVER_IP}/32 via ${KEENETIC_GW} (loop prevention)"
 log "  RU subnets:      ${ADDED} routes via ${KEENETIC_GW}"
+log "  Exceptions:      ${EX_ADDED} routes via ${KEENETIC_GW} (from ${EXCEPTIONS_FILE})"
 log "  Default:         dev ${VPN_IFACE} (all other traffic → VPN)"
 log "  iptables rules:  ${IPTABLES_RULES}"
 log "  iptables LOG:    [VPN] on ${VPN_IFACE}, [ISP] on eth0 (NEW only, 10/min limit)"
