@@ -116,7 +116,10 @@ log "Subnet file valid: ${SUBNET_COUNT} lines in ${SUBNET_FILE}"
 # ip route flush dev <iface> removes ALL routes using awg0 (including default via awg0).
 # The VPN server host route lives in the main table via ISP (not via awg0), so we
 # delete it separately.
-log "Stage 3: Flushing FORWARD ACCEPT and LOG rules (if present)..."
+log "Stage 3: Flushing FORWARD ACCEPT, LOG, and NAT rules (if present)..."
+# Remove old eth0 MASQUERADE without LAN exclusion (superseded by ! -d LAN variant)
+iptables -t nat -C POSTROUTING -o eth0 -j MASQUERADE 2>/dev/null && \
+    iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE || true
 iptables -C FORWARD -i eth0 -j ACCEPT 2>/dev/null && \
     iptables -D FORWARD -i eth0 -j ACCEPT || true
 iptables -C FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null && \
@@ -177,11 +180,13 @@ else
     log "MASQUERADE on awg0: added"
 fi
 
-# NAT-02: MASQUERADE on eth0 — ISP-bound RU traffic (D-07 idempotency check)
-if iptables -t nat -C POSTROUTING -o eth0 -j MASQUERADE 2>/dev/null; then
-    log "MASQUERADE on eth0: already present (no change)"
+# NAT-02: MASQUERADE on eth0 — ISP-bound RU traffic, excluding local LAN.
+# ! -d LAN_SUBNET ensures intra-LAN traffic (e.g. to router at 192.168.1.1) is NOT
+# masqueraded — router web/app access stays with real device IP, not RPi's IP.
+if iptables -t nat -C POSTROUTING -o eth0 ! -d "${LAN_SUBNET}" -j MASQUERADE 2>/dev/null; then
+    log "MASQUERADE on eth0 (! LAN): already present (no change)"
 else
-    iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+    iptables -t nat -A POSTROUTING -o eth0 ! -d "${LAN_SUBNET}" -j MASQUERADE
     log "MASQUERADE on eth0: added"
 fi
 

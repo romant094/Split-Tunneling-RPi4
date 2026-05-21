@@ -76,10 +76,13 @@ if iptables -t nat -C POSTROUTING -o "${VPN_IFACE}" -j MASQUERADE 2>/dev/null; t
     iptables -t nat -D POSTROUTING -o "${VPN_IFACE}" -j MASQUERADE
     log "MASQUERADE on ${VPN_IFACE}: removed"
 fi
-if iptables -t nat -C POSTROUTING -o eth0 -j MASQUERADE 2>/dev/null; then
-    iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
-    log "MASQUERADE on eth0: removed"
+if iptables -t nat -C POSTROUTING -o eth0 ! -d "${LAN_SUBNET}" -j MASQUERADE 2>/dev/null; then
+    iptables -t nat -D POSTROUTING -o eth0 ! -d "${LAN_SUBNET}" -j MASQUERADE
+    log "MASQUERADE on eth0 (! LAN): removed"
 fi
+# Also remove old variant without LAN exclusion if present from previous deploys
+iptables -t nat -C POSTROUTING -o eth0 -j MASQUERADE 2>/dev/null && \
+    iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE || true
 
 # ─── Step 4b: Remove FORWARD ACCEPT and LOG rules (Phase 4) ─────────────────────
 log "Removing FORWARD ACCEPT rules..."
