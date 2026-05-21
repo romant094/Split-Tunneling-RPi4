@@ -3,14 +3,14 @@
 #
 # Purpose: Fully undoes the VPN gateway setup in one idempotent command.
 # Requirements satisfied: ROLL-01 (stops services, flushes routes, removes NAT/cron),
-#                         ROLL-02 (preserves awg0.conf, packages, routing.sh, vpn-ru-subnets.txt)
+#                         ROLL-02 (preserves awg0.conf, packages, routing.sh, white-list.txt)
 #
 # Decisions honored:
 #   D-08: Rollback order — stop+disable services, flush routes, remove NAT, remove cron,
 #         restore ISP default route via static ip route add (no dhclient dependency)
 #   D-09: Silent execution + syslog via logger; final state printed to stdout
 #   D-10: Preserved files: /etc/amnezia/amneziawg/awg0.conf, /etc/routing.sh,
-#         /etc/vpn-ru-subnets.txt, AmneziaWG packages — rollback only undoes running state
+#         /etc/white-list.txt, AmneziaWG packages — rollback only undoes running state
 #
 # REMOVED by this script:
 #   - vpn-routing.service (stopped + disabled)
@@ -22,7 +22,7 @@
 # PRESERVED by this script (ROLL-02):
 #   - /etc/amnezia/amneziawg/awg0.conf (mode 600)
 #   - /etc/routing.sh
-#   - /etc/vpn-ru-subnets.txt
+#   - /etc/white-list.txt
 #   - AmneziaWG packages (awg, awg-quick, etc.)
 #
 # Usage: sudo /etc/vpn-rollback.sh
@@ -104,6 +104,12 @@ if iptables -C FORWARD -o eth0 -m state --state NEW -m limit --limit 10/min --li
     log "LOG rule [ISP] on eth0: removed"
 fi
 
+# ─── Step 4c: Remove exception file (D-14) ───────────────────────────────────
+# rm -f handles absence silently — exception file may or may not exist on this RPi.
+log "Removing /etc/white-list-extended.txt (if present)..."
+rm -f /etc/white-list-extended.txt
+log "/etc/white-list-extended.txt: removed (or was not present)"
+
 # ─── Step 5: Re-save iptables without MASQUERADE rules (Pitfall 5 tolerance) ──
 # MASQUERADE rules are already removed from the running kernel above.
 # netfilter-persistent save persists the clean state to survive reboots.
@@ -135,6 +141,7 @@ echo " Routes flushed: dev ${VPN_IFACE}"
 echo " NAT rules removed: MASQUERADE on ${VPN_IFACE} + eth0"
 echo "   dnsmasq: stopped and disabled"
 echo "   LOG rules removed: [VPN] on ${VPN_IFACE}, [ISP] on eth0"
+echo "   Exception file removed: /etc/white-list-extended.txt (if present)"
 echo "   Note: /etc/dnsmasq.conf and /etc/vpn-status.sh remain on disk (not removed)"
 echo " Cron removed: /etc/cron.d/vpn-routes"
 echo " Default route restored: via ${KEENETIC_GW}"
@@ -142,7 +149,7 @@ echo ""
 echo " Preserved (not removed):"
 echo "   /etc/amnezia/amneziawg/awg0.conf"
 echo "   /etc/routing.sh"
-echo "   /etc/vpn-ru-subnets.txt"
+echo "   /etc/white-list.txt"
 echo "   AmneziaWG packages"
 echo ""
 echo " To verify: ip route show default"
