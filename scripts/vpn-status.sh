@@ -41,6 +41,7 @@ source /etc/vpn-gateway.env
 LAST=50
 FILTER=""
 DEVICE=""
+VIA=""
 
 # ─── Argument Parsing ────────────────────────────────────────────────────────
 for arg in "$@"; do
@@ -59,9 +60,17 @@ for arg in "$@"; do
         --device=*)
             DEVICE="${arg#--device=}"
             ;;
+        --via=*)
+            val="${arg#--via=}"
+            if [[ "${val}" != "vpn" ]] && [[ "${val}" != "isp" ]]; then
+                err "--via value must be 'vpn' or 'isp', got: '${val}'"
+                exit 1
+            fi
+            VIA="${val^^}"
+            ;;
         *)
             err "Unknown argument: '${arg}'"
-            err "Usage: vpn-status.sh [--last=N] [--filter=STRING] [--device=IP]"
+            err "Usage: vpn-status.sh [--last=N] [--filter=STRING] [--device=IP] [--via=vpn|isp]"
             exit 1
             ;;
     esac
@@ -162,6 +171,7 @@ if [[ ${#entries[@]} -eq 0 ]]; then
 else
     for entry in "${entries[@]}"; do
         IFS='|' read -r ts src_ip dst_ip domain decision <<< "${entry}"
+        if [[ -n "${VIA}" ]] && [[ "${decision}" != "${VIA}" ]]; then continue; fi
         printf "%-20s %-18s %-18s %-40s %s\n" "${ts}" "${src_ip}" "${dst_ip}" "${domain}" "${decision}"
     done
 fi
