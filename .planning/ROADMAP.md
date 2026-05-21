@@ -14,7 +14,7 @@
 | 2 | Routing & NAT | Split-tunnel routing active, LAN devices NATed through RPi | ROUT-01–04, NAT-01–03 | 6 |
 | 3 | Autostart, Cron & Rollback | Survives reboots, daily refresh, one-command rollback | AUTO-01–03, ROLL-01–02, VRFY-01–04 | 4 |
 | 4 | Traffic Logging & Visibility | 3/3 | Complete   | 2026-05-21 |
-| 5 | Custom Route Exceptions | 2/2 | Complete | 2026-05-21 |
+| 5 | Custom Route Exceptions | 2/2 | Complete   | 2026-05-21 |
 | 6 | Documentation | Ops runbook: deploy, verify, rollback, add exceptions — one source of truth | TBD | TBD |
 
 ---
@@ -184,7 +184,7 @@
 **Goal:** Add user-defined per-CIDR ISP-bypass exceptions on top of the auto-downloaded RU CIDR list; rename /etc/vpn-ru-subnets.txt → /etc/white-list.txt for naming parity; extend vpn-status.sh with --via=vpn|isp filter for the discover→exception workflow
 **Requirements**: TBD
 **Depends on:** Phase 4
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 **Wave 1**
