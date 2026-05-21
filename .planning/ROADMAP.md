@@ -14,7 +14,7 @@
 | 2 | Routing & NAT | Split-tunnel routing active, LAN devices NATed through RPi | ROUT-01–04, NAT-01–03 | 6 |
 | 3 | Autostart, Cron & Rollback | Survives reboots, daily refresh, one-command rollback | AUTO-01–03, ROLL-01–02, VRFY-01–04 | 4 |
 | 4 | Traffic Logging & Visibility | 3/3 | Complete   | 2026-05-21 |
-| 5 | Custom Route Exceptions | Per-IP/domain overrides forcing traffic through ISP | TBD | TBD |
+| 5 | Custom Route Exceptions | Per-IP/CIDR overrides forcing traffic through ISP | TBD | TBD |
 | 6 | Documentation | Ops runbook: deploy, verify, rollback, add exceptions — one source of truth | TBD | TBD |
 
 ---
@@ -166,13 +166,14 @@
 
 ### Phase 5: Custom Route Exceptions
 
-**Goal:** Define per-IP and per-domain overrides that force traffic through ISP, bypassing the default VPN route
+**Goal:** Add user-defined per-CIDR ISP-bypass exceptions on top of the auto-downloaded RU CIDR list; rename /etc/vpn-ru-subnets.txt → /etc/white-list.txt for naming parity; extend vpn-status.sh with --via=vpn|isp filter for the discover→exception workflow
 **Requirements**: TBD
 **Depends on:** Phase 4
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 5 to break down)
+- [ ] 05-01-PLAN.md — Wave 1: routing.sh rename SUBNET_FILE → WHITE_LIST_FILE + Stage 5b loader for /etc/white-list-extended.txt; update-vpn-routes path rename; vpn-rollback.sh rm white-list-extended + summary rename (D-06, D-07, D-08, D-09, D-14)
+- [ ] 05-02-PLAN.md — Wave 2: vpn-status.sh --via=vpn|isp filter (D-10, D-11); deploy.sh new conditional stage for configs/white-list-extended.txt (D-12, D-13); configs/white-list-extended.txt.example committed; .gitignore the user file; drop --no-update from final activation (Pitfall 2 fix)
 
 ### Phase 6: Documentation
 
@@ -186,4 +187,4 @@ Plans:
 
 ---
 *Created: 2026-05-18*
-*Updated: 2026-05-21 — Phase 4 plans created (04-01 LOG rules, 04-02 dnsmasq+vpn-status.sh, 04-03 deploy+rollback integration)*
+*Updated: 2026-05-21 — Phase 5 plans created (05-01 RPi-side rename + Stage 5b loader + rollback cleanup; 05-02 vpn-status --via + deploy stage + example file + gitignore + --no-update drop)*
