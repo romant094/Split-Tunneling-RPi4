@@ -10,13 +10,13 @@
 #
 # On download failure: exit 0 (no cron failure mail; existing routes remain intact)
 # On hash match:       exit 0 (no rebuild; no connection disruption)
-# On hash mismatch:    mv temp → /etc/vpn-ru-subnets.txt; run /etc/routing.sh --no-update
+# On hash mismatch:    mv temp → /etc/white-list.txt; run /etc/routing.sh --no-update
 # On rebuild failure:  set -e propagates; cron generates failure mail (acceptable — rebuild failure IS an error)
 
 set -euo pipefail
 
 # ─── Constants ────────────────────────────────────────────────────────────────
-SUBNET_FILE="/etc/vpn-ru-subnets.txt"
+SUBNET_FILE="/etc/white-list.txt"
 # Distinct from routing.sh's /tmp/ru-subnets.tmp to avoid collisions if cron
 # runs while an operator is also running routing.sh manually.
 SUBNET_TMP="/tmp/ru-subnets-cron.tmp"
