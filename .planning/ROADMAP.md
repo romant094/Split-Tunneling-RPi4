@@ -200,12 +200,18 @@ Plans:
 **Goal:** Ops runbook covering all phases — how to deploy, verify routing, rollback, add custom exceptions, and interpret traffic logs; each major script and workflow documented with examples
 **Requirements**: TBD
 **Depends on:** Phase 5
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 6 to break down)
+**Wave 1:**
+
+- [ ] 06-01-PLAN.md — README.md: English ops runbook (12 sections, CLI reference for 6 scripts, 7 troubleshooting gotchas, phase links table)
+
+**Wave 2** *(blocked on Wave 1 completion)*:
+
+- [ ] 06-02-PLAN.md — docs/README.ru.md: full Russian translation of README.md
 
 ---
 *Created: 2026-05-18*
-*Updated: 2026-05-21 — Phase 5 complete (05-01 RPi-side rename + Stage 5b loader + rollback cleanup; 05-02 vpn-status --via + deploy Stage 21 + example file + gitignore + --no-update drop)*
+*Updated: 2026-05-21 — Phase 5 complete; Phase 6 plans created (06-01 English README, 06-02 Russian translation)*
