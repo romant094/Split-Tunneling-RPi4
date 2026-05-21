@@ -48,8 +48,14 @@ CRON_FILE_REMOTE="/etc/cron.d/vpn-routes"
 VPN_ROLLBACK_LOCAL="scripts/vpn-rollback.sh"
 VPN_ROLLBACK_REMOTE="/etc/vpn-rollback.sh"
 VPN_ROLLBACK_TMP="/tmp/vpn-rollback.sh.tmp"
+DNSMASQ_CONF_LOCAL="configs/dnsmasq.conf"
+DNSMASQ_CONF_REMOTE="/etc/dnsmasq.conf"
+DNSMASQ_CONF_TMP="/tmp/dnsmasq.conf.tmp"
+VPN_STATUS_LOCAL="scripts/vpn-status.sh"
+VPN_STATUS_REMOTE="/etc/vpn-status.sh"
+VPN_STATUS_TMP="/tmp/vpn-status.sh.tmp"
 
-TOTAL_STAGES=16
+TOTAL_STAGES=20
 
 # ─── Argument Parsing (D-12) ─────────────────────────────────────────────────
 RUN_ROUTING=true
@@ -112,6 +118,14 @@ if [[ ! -f "$UPDATE_VPN_ROUTES_LOCAL" ]]; then
 fi
 if [[ ! -f "$VPN_ROLLBACK_LOCAL" ]]; then
     echo "ERROR: $VPN_ROLLBACK_LOCAL not found — run from the repo root" >&2
+    exit 1
+fi
+if [[ ! -f "$DNSMASQ_CONF_LOCAL" ]]; then
+    echo "ERROR: $DNSMASQ_CONF_LOCAL not found — run from the repo root" >&2
+    exit 1
+fi
+if [[ ! -f "$VPN_STATUS_LOCAL" ]]; then
+    echo "ERROR: $VPN_STATUS_LOCAL not found — run from the repo root" >&2
     exit 1
 fi
 
@@ -295,6 +309,29 @@ scp -o BatchMode=yes "${VPN_ROLLBACK_LOCAL}" "${SSH_HOST}:${VPN_ROLLBACK_TMP}"
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${VPN_ROLLBACK_TMP} ${VPN_ROLLBACK_REMOTE} && sudo chmod +x ${VPN_ROLLBACK_REMOTE} && sudo chown root:root ${VPN_ROLLBACK_REMOTE}"
 echo "       vpn-rollback.sh deployed (chmod +x, root:root)."
 
+# ─── Stage 17: Deploy dnsmasq.conf to RPi (D-18) ────────────────────────────
+echo "[17/${TOTAL_STAGES}] Deploying dnsmasq.conf to ${SSH_HOST}:${DNSMASQ_CONF_REMOTE}..."
+scp -o BatchMode=yes "${DNSMASQ_CONF_LOCAL}" "${SSH_HOST}:${DNSMASQ_CONF_TMP}"
+ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${DNSMASQ_CONF_TMP} ${DNSMASQ_CONF_REMOTE} && sudo chmod 644 ${DNSMASQ_CONF_REMOTE} && sudo chown root:root ${DNSMASQ_CONF_REMOTE}"
+echo "       dnsmasq.conf deployed (mode 644, root:root)."
+
+# ─── Stage 18: Ensure dnsmasq is installed and enabled (D-18) ───────────────
+echo "[18/${TOTAL_STAGES}] Ensuring dnsmasq is installed and enabled on ${SSH_HOST}..."
+ssh -o BatchMode=yes "${SSH_HOST}" "if ! dpkg -l dnsmasq 2>/dev/null | grep -q '^ii'; then sudo DEBIAN_FRONTEND=noninteractive apt-get install -y dnsmasq; fi"
+ssh -o BatchMode=yes "${SSH_HOST}" "sudo systemctl enable --now dnsmasq"
+echo "       dnsmasq installed and enabled."
+
+# ─── Stage 19: Deploy vpn-status.sh to RPi (D-19) ───────────────────────────
+echo "[19/${TOTAL_STAGES}] Deploying vpn-status.sh to ${SSH_HOST}:${VPN_STATUS_REMOTE}..."
+scp -o BatchMode=yes "${VPN_STATUS_LOCAL}" "${SSH_HOST}:${VPN_STATUS_TMP}"
+ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${VPN_STATUS_TMP} ${VPN_STATUS_REMOTE} && sudo chmod +x ${VPN_STATUS_REMOTE} && sudo chown root:root ${VPN_STATUS_REMOTE}"
+echo "       vpn-status.sh deployed (chmod +x, root:root)."
+
+# ─── Stage 20: Activate Phase 4 LOG rules via routing.sh (D-18, D-04) ────────
+echo "[20/${TOTAL_STAGES}] Activating Phase 4 LOG rules via routing.sh on ${SSH_HOST}..."
+ssh -o BatchMode=yes "${SSH_HOST}" "sudo ${ROUTING_SH_REMOTE} --no-update"
+echo "       routing.sh re-run complete — [VPN] and [ISP] LOG rules active."
+
 # ─── Final Summary ───────────────────────────────────────────────────────────
 # Tunnel bring-up is NOT automated — RESEARCH.md Pitfall 5 (awg-quick up is not idempotent)
 # The commands below are printed for the developer to run manually.
@@ -312,6 +349,9 @@ echo "   ROUT-01..04 + NAT-01..03: ${ROUTING_SH_REMOTE} (chmod +x)"
 echo "   AUTO-01 + AUTO-02: vpn-routing.service + awg-quick@awg0 enabled at boot"
 echo "   AUTO-03: /etc/cron.d/vpn-routes (runs ${UPDATE_VPN_ROUTES_REMOTE} daily at ${CRON_UPDATE_HOUR}:00)"
 echo "   ROLL-01: ${VPN_ROLLBACK_REMOTE} (chmod +x, root:root)"
+echo "   PHASE 4: ${DNSMASQ_CONF_REMOTE} (mode 644, root:root)"
+echo "   PHASE 4: ${VPN_STATUS_REMOTE} (chmod +x, root:root)"
+echo "   PHASE 4: iptables LOG rules [VPN] + [ISP] active (via routing.sh)"
 echo ""
 echo " Next steps (run manually — tunnel bring-up is intentionally NOT automated):"
 echo ""
@@ -362,4 +402,9 @@ echo " Rollback (when needed):"
 echo "   ssh pi4 \"sudo /etc/vpn-rollback.sh\""
 echo "   # After rollback: ip route show default → default via 192.168.1.1"
 echo "   # To re-activate: ./deploy.sh  (re-installs everything; awg0.conf preserved)"
+echo ""
+echo " Phase 4 connection visibility:"
+echo "   # Check recent connections:"
+echo "   ssh pi4 \"sudo /etc/vpn-status.sh\""
+echo "   ssh pi4 \"sudo /etc/vpn-status.sh --filter=steam --last=100\""
 echo "================================================================"

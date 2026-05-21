@@ -49,6 +49,12 @@ systemctl stop vpn-routing.service 2>/dev/null || true
 systemctl disable vpn-routing.service 2>/dev/null || true
 log "vpn-routing.service: stopped and disabled"
 
+# ─── Step 1b: Stop + disable dnsmasq (D-21) ───────────────────────────────────────
+log "Stopping dnsmasq..."
+systemctl stop dnsmasq 2>/dev/null || true
+systemctl disable dnsmasq 2>/dev/null || true
+log "dnsmasq: stopped and disabled"
+
 # ─── Step 2: Stop + disable awg-quick@${VPN_IFACE} (D-08 step 2) ────────────
 log "Stopping awg-quick@${VPN_IFACE}..."
 systemctl stop "awg-quick@${VPN_IFACE}" 2>/dev/null || true
@@ -73,6 +79,18 @@ fi
 if iptables -t nat -C POSTROUTING -o eth0 -j MASQUERADE 2>/dev/null; then
     iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
     log "MASQUERADE on eth0: removed"
+fi
+
+# ─── Step 4b: Remove iptables LOG rules (D-21, Phase 4) ──────────────────────────
+# Mirrors Step 4 -C before -D pattern. Flag set must be identical to routing.sh Stage 7b.
+log "Removing iptables LOG rules (Phase 4)..."
+if iptables -C FORWARD -o "${VPN_IFACE}" -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[VPN] " --log-level 6 2>/dev/null; then
+    iptables -D FORWARD -o "${VPN_IFACE}" -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[VPN] " --log-level 6
+    log "LOG rule [VPN] on ${VPN_IFACE}: removed"
+fi
+if iptables -C FORWARD -o eth0 -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[ISP] " --log-level 6 2>/dev/null; then
+    iptables -D FORWARD -o eth0 -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[ISP] " --log-level 6
+    log "LOG rule [ISP] on eth0: removed"
 fi
 
 # ─── Step 5: Re-save iptables without MASQUERADE rules (Pitfall 5 tolerance) ──
@@ -104,6 +122,9 @@ echo "   vpn-routing.service"
 echo "   awg-quick@${VPN_IFACE}"
 echo " Routes flushed: dev ${VPN_IFACE}"
 echo " NAT rules removed: MASQUERADE on ${VPN_IFACE} + eth0"
+echo "   dnsmasq: stopped and disabled"
+echo "   LOG rules removed: [VPN] on ${VPN_IFACE}, [ISP] on eth0"
+echo "   Note: /etc/dnsmasq.conf and /etc/vpn-status.sh remain on disk (not removed)"
 echo " Cron removed: /etc/cron.d/vpn-routes"
 echo " Default route restored: via ${KEENETIC_GW}"
 echo ""
