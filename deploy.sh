@@ -30,7 +30,6 @@
 set -euo pipefail
 
 # ─── Configuration (D-04, D-09) ─────────────────────────────────────────────
-SSH_HOST="pi4"
 TEMPLATE="amnezia.key.template.txt"
 AWG_CONF_REMOTE="/etc/amnezia/amneziawg/awg0.conf"
 ENV_REMOTE="/etc/vpn-gateway.env"

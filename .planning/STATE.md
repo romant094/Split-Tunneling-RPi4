@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 4 planned — ready to execute
-last_updated: "2026-05-21T07:45:04.303Z"
+stopped_at: Phase 4 complete — verified on live RPi
+last_updated: "2026-05-21T11:00:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 4
@@ -20,24 +20,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Non-RU traffic exits through AmneziaWG VPN; RU traffic exits direct via ISP — transparent to LAN devices, survives reboots, fully reversible.
-**Current focus:** Phase 04 — traffic-logging-visibility-vpn-isp
+**Current focus:** Phase 05 — custom-route-exceptions
 
 ## Current Phase
 
-**Phase 4: Traffic Logging & Visibility**
+**Phase 4: Traffic Logging & Visibility — COMPLETE ✓**
 
-Goal: Log per-connection routing decisions (VPN vs ISP), visible subnets, and resolved domain names
-
-Status: Ready to execute (3 plans in 2 waves)
+Verified on live RPi 2026-05-21.
 
 ## Phase Progress
 
 | Phase | Status | Plans | Progress |
 |-------|--------|-------|----------|
-| 1 — Foundation & Config | ✓ Plans done | 2/2 done | 100% |
-| 2 — Routing & NAT | ✓ Plans done | 2/2 done | 100% |
-| 3 — Autostart, Cron & Rollback | ✓ Plans done | 3/3 done | 100% |
-| 4 — Traffic Logging & Visibility | ○ Ready to execute | 0/3 done | 0% |
+| 1 — Foundation & Config | ✓ Complete | 2/2 done | 100% |
+| 2 — Routing & NAT | ✓ Complete | 2/2 done | 100% |
+| 3 — Autostart, Cron & Rollback | ✓ Complete | 3/3 done | 100% |
+| 4 — Traffic Logging & Visibility | ✓ Complete | 3/3 done | 100% |
+| 5 — Custom Route Exceptions | ○ Pending | 0/? | 0% |
 
 ## Requirements
 
@@ -72,13 +71,13 @@ Status: Ready to execute (3 plans in 2 waves)
 
 ## Last Session
 
-**Stopped at:** Phase 4 planned — ready to execute
-**Timestamp:** 2026-05-21T00:00:00Z
-**Resume:** Run /gsd:execute-phase 4 — 3 plans ready (04-01 iptables LOG, 04-02 dnsmasq+vpn-status.sh, 04-03 deploy+rollback)
+**Stopped at:** Phase 4 complete — verified on live RPi
+**Timestamp:** 2026-05-21T11:00:00Z
+**Resume:** Run /gsd:plan-phase 5 — Custom Route Exceptions
 
 ---
 *Initialized: 2026-05-18*
-*Updated: 2026-05-20 — Phase 3 complete; deploy.sh at TOTAL_STAGES=16; vpn-routing.service, update-vpn-routes, vpn-rollback.sh all deployed and verified on live RPi*
+*Updated: 2026-05-21 — Phase 4 complete; deploy.sh at TOTAL_STAGES=20; split tunneling verified on live network*
 
 ## Accumulated Context
 
@@ -87,3 +86,11 @@ Status: Ready to execute (3 plans in 2 waves)
 - Phase 4 added: Traffic Logging & Visibility — per-connection route logging (VPN/ISP), subnets, domain names
 - Phase 5 added: Custom Route Exceptions — per-IP/domain overrides forcing traffic through ISP
 - Phase 6 added: Documentation — ops runbook (deploy, verify, rollback, add exceptions)
+
+### Phase 4 Post-execution Fixes (applied after plans, discovered during live testing)
+
+- routing.sh: FORWARD chain policy is DROP (Docker). Added ACCEPT rules (-i eth0, RELATED,ESTABLISHED) — without them LAN forwarding silently dropped
+- routing.sh: LOG rules must be BEFORE ACCEPT — LOG is non-terminating, ACCEPT terminates; wrong order = no journald entries
+- routing.sh: eth0 MASQUERADE must exclude LAN subnet (`! -d LAN_SUBNET`) — full MASQUERADE caused Keenetic web/app admin to block requests appearing from 192.168.1.254
+- deploy.sh: Stage 17/18 order swapped — dnsmasq must be installed before config deployed to avoid dpkg interactive prompt
+- SSH_HOST moved from deploy.sh hardcode to .env
