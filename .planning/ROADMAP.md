@@ -13,7 +13,7 @@
 | 1 | Foundation & Config | AmneziaWG running, config deployed | INST-01, INST-02, CONF-01, CONF-02 | 4 |
 | 2 | Routing & NAT | Split-tunnel routing active, LAN devices NATed through RPi | ROUT-01–04, NAT-01–03 | 6 |
 | 3 | Autostart, Cron & Rollback | Survives reboots, daily refresh, one-command rollback | AUTO-01–03, ROLL-01–02, VRFY-01–04 | 4 |
-| 4 | Traffic Logging & Visibility | Per-connection route logging (VPN/ISP), subnets, domain names | TBD | TBD |
+| 4 | Traffic Logging & Visibility | 0/3 | Planned    |  |
 | 5 | Custom Route Exceptions | Per-IP/domain overrides forcing traffic through ISP | TBD | TBD |
 | 6 | Documentation | Ops runbook: deploy, verify, rollback, add exceptions — one source of truth | TBD | TBD |
 
@@ -152,7 +152,7 @@
 **Goal:** Log per-connection routing decisions (VPN vs ISP), visible subnets, and resolved domain names
 **Requirements**: TBD
 **Depends on:** Phase 3
-**Plans:** 3 plans
+**Plans:** 0/3 plans executed
 
 **Wave 1:**
 - [ ] 04-01-PLAN.md — iptables LOG rules in scripts/routing.sh ([VPN]/[ISP] on FORWARD chain, --state NEW, rate limited)
