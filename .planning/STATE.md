@@ -37,6 +37,7 @@ Verified on live RPi 2026-05-21.
 | 3 — Autostart, Cron & Rollback | ✓ Complete | 3/3 done | 100% |
 | 4 — Traffic Logging & Visibility | ✓ Complete | 3/3 done | 100% |
 | 5 — Custom Route Exceptions | ○ Pending | 0/? | 0% |
+| 6 — Documentation | ○ Pending | 0/? | 0% |
 
 ## Requirements
 
