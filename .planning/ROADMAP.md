@@ -154,10 +154,15 @@
 **Depends on:** Phase 3
 **Plans:** 3 plans
 
-Plans:
+**Wave 1:**
 - [ ] 04-01-PLAN.md — iptables LOG rules in scripts/routing.sh ([VPN]/[ISP] on FORWARD chain, --state NEW, rate limited)
 - [ ] 04-02-PLAN.md — configs/dnsmasq.conf + scripts/vpn-status.sh (connection visibility query tool)
+
+**Wave 2** *(blocked on Wave 1 completion)*:
 - [ ] 04-03-PLAN.md — deploy.sh Stages 17–20 + vpn-rollback.sh Phase 4 teardown
+
+**Cross-cutting constraints:**
+- iptables LOG rule flag sets must be identical in routing.sh (add) and vpn-rollback.sh (remove)
 
 ### Phase 5: Custom Route Exceptions
 

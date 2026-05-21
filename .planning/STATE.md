@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 4 context gathered
-last_updated: "2026-05-20T17:46:55.832Z"
+stopped_at: Phase 4 planned — ready to execute
+last_updated: "2026-05-21T00:00:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 7
+  total_plans: 10
   completed_plans: 7
   percent: 50
 ---
@@ -20,15 +20,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Non-RU traffic exits through AmneziaWG VPN; RU traffic exits direct via ISP — transparent to LAN devices, survives reboots, fully reversible.
-**Current focus:** Phase 03 — autostart-cron-rollback
+**Current focus:** Phase 04 — traffic-logging-visibility-vpn-isp
 
 ## Current Phase
 
-**Phase 1: Foundation & Config**
+**Phase 4: Traffic Logging & Visibility**
 
-Goal: AmneziaWG installed, config deployed, IP forwarding on, tunnel operational
+Goal: Log per-connection routing decisions (VPN vs ISP), visible subnets, and resolved domain names
 
-Status: Executing Phase 03
+Status: Ready to execute (3 plans in 2 waves)
 
 ## Phase Progress
 
@@ -37,6 +37,7 @@ Status: Executing Phase 03
 | 1 — Foundation & Config | ✓ Plans done | 2/2 done | 100% |
 | 2 — Routing & NAT | ✓ Plans done | 2/2 done | 100% |
 | 3 — Autostart, Cron & Rollback | ✓ Plans done | 3/3 done | 100% |
+| 4 — Traffic Logging & Visibility | ○ Ready to execute | 0/3 done | 0% |
 
 ## Requirements
 
@@ -71,9 +72,9 @@ Status: Executing Phase 03
 
 ## Last Session
 
-**Stopped at:** Phase 4 context gathered
-**Timestamp:** 2026-05-20T17:40:00Z
-**Resume:** Run Phase 04 (traffic logging / visibility) — Phase 3 complete, gateway fully operational
+**Stopped at:** Phase 4 planned — ready to execute
+**Timestamp:** 2026-05-21T00:00:00Z
+**Resume:** Run /gsd:execute-phase 4 — 3 plans ready (04-01 iptables LOG, 04-02 dnsmasq+vpn-status.sh, 04-03 deploy+rollback)
 
 ---
 *Initialized: 2026-05-18*
