@@ -53,8 +53,11 @@ DNSMASQ_CONF_TMP="/tmp/dnsmasq.conf.tmp"
 VPN_STATUS_LOCAL="scripts/vpn-status.sh"
 VPN_STATUS_REMOTE="/etc/vpn-status.sh"
 VPN_STATUS_TMP="/tmp/vpn-status.sh.tmp"
+WATCH_ROUTES_LOCAL="scripts/watch-routes.py"
+WATCH_ROUTES_REMOTE="/etc/watch-routes.py"
+WATCH_ROUTES_TMP="/tmp/watch-routes.py.tmp"
 
-TOTAL_STAGES=20
+TOTAL_STAGES=21
 
 # ─── Argument Parsing (D-12) ─────────────────────────────────────────────────
 RUN_ROUTING=true
@@ -125,6 +128,10 @@ if [[ ! -f "$DNSMASQ_CONF_LOCAL" ]]; then
 fi
 if [[ ! -f "$VPN_STATUS_LOCAL" ]]; then
     echo "ERROR: $VPN_STATUS_LOCAL not found — run from the repo root" >&2
+    exit 1
+fi
+if [[ ! -f "$WATCH_ROUTES_LOCAL" ]]; then
+    echo "ERROR: $WATCH_ROUTES_LOCAL not found — run from the repo root" >&2
     exit 1
 fi
 
@@ -328,8 +335,14 @@ scp -o BatchMode=yes "${VPN_STATUS_LOCAL}" "${SSH_HOST}:${VPN_STATUS_TMP}"
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${VPN_STATUS_TMP} ${VPN_STATUS_REMOTE} && sudo chmod +x ${VPN_STATUS_REMOTE} && sudo chown root:root ${VPN_STATUS_REMOTE}"
 echo "       vpn-status.sh deployed (chmod +x, root:root)."
 
-# ─── Stage 20: Activate Phase 4 LOG rules via routing.sh (D-18, D-04) ────────
-echo "[20/${TOTAL_STAGES}] Activating Phase 4 LOG rules via routing.sh on ${SSH_HOST}..."
+# ─── Stage 20: Deploy watch-routes.py to RPi ────────────────────────────────
+echo "[20/${TOTAL_STAGES}] Deploying watch-routes.py to ${SSH_HOST}:${WATCH_ROUTES_REMOTE}..."
+scp -o BatchMode=yes "${WATCH_ROUTES_LOCAL}" "${SSH_HOST}:${WATCH_ROUTES_TMP}"
+ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${WATCH_ROUTES_TMP} ${WATCH_ROUTES_REMOTE} && sudo chmod +x ${WATCH_ROUTES_REMOTE} && sudo chown root:root ${WATCH_ROUTES_REMOTE}"
+echo "       watch-routes.py deployed (chmod +x, root:root)."
+
+# ─── Stage 21: Activate Phase 4 LOG rules via routing.sh (D-18, D-04) ────────
+echo "[21/${TOTAL_STAGES}] Activating Phase 4 LOG rules via routing.sh on ${SSH_HOST}..."
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo ${ROUTING_SH_REMOTE} --no-update"
 echo "       routing.sh re-run complete — [VPN] and [ISP] LOG rules active."
 
@@ -352,6 +365,7 @@ echo "   AUTO-03: /etc/cron.d/vpn-routes (runs ${UPDATE_VPN_ROUTES_REMOTE} daily
 echo "   ROLL-01: ${VPN_ROLLBACK_REMOTE} (chmod +x, root:root)"
 echo "   PHASE 4: ${DNSMASQ_CONF_REMOTE} (mode 644, root:root)"
 echo "   PHASE 4: ${VPN_STATUS_REMOTE} (chmod +x, root:root)"
+echo "   PHASE 4: ${WATCH_ROUTES_REMOTE} (chmod +x, root:root)"
 echo "   PHASE 4: iptables LOG rules [VPN] + [ISP] active (via routing.sh)"
 echo ""
 echo " Next steps (run manually — tunnel bring-up is intentionally NOT automated):"
@@ -413,6 +427,8 @@ echo "   ssh pi4 \"sudo /etc/vpn-status.sh\""
 echo "   # expect: table header + connection rows (generate LAN traffic first)"
 echo "   ssh pi4 \"sudo journalctl -k -n 20 --no-pager | grep -E '\[VPN\]|\[ISP\]'\""
 echo "   # expect: kernel lines with SRC= DST= and [VPN] or [ISP] prefix"
+echo "   sudo ${WATCH_ROUTES_REMOTE} --src <device-ip>"
+echo "   # real-time enriched view: [VPN]/[ISP] + reverse-DNS hostnames"
 echo "   # Idempotency check (must not duplicate LOG rules):"
 echo "   ssh pi4 \"sudo /etc/routing.sh --no-update && sudo iptables -L FORWARD -n -v | grep -c LOG\""
 echo "   # expect: 2"
