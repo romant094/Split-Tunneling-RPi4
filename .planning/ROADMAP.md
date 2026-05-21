@@ -152,10 +152,12 @@
 **Goal:** Log per-connection routing decisions (VPN vs ISP), visible subnets, and resolved domain names
 **Requirements**: TBD
 **Depends on:** Phase 3
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 4 to break down)
+- [ ] 04-01-PLAN.md — iptables LOG rules in scripts/routing.sh ([VPN]/[ISP] on FORWARD chain, --state NEW, rate limited)
+- [ ] 04-02-PLAN.md — configs/dnsmasq.conf + scripts/vpn-status.sh (connection visibility query tool)
+- [ ] 04-03-PLAN.md — deploy.sh Stages 17–20 + vpn-rollback.sh Phase 4 teardown
 
 ### Phase 5: Custom Route Exceptions
 
@@ -179,4 +181,4 @@ Plans:
 
 ---
 *Created: 2026-05-18*
-*Updated: 2026-05-20 — Phase 3 plans created (03-01 autostart, 03-02 cron, 03-03 rollback)*
+*Updated: 2026-05-21 — Phase 4 plans created (04-01 LOG rules, 04-02 dnsmasq+vpn-status.sh, 04-03 deploy+rollback integration)*
