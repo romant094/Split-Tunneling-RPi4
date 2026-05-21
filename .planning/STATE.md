@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-01-PLAN.md (RPi-side rename + Stage 5b loader + rollback cleanup)
-last_updated: "2026-05-21T13:56:00.000Z"
+stopped_at: Completed 05-02-PLAN.md — vpn-status.sh --via flag, deploy.sh Stage 21, example template
+last_updated: "2026-05-21T14:35:00.000Z"
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 12
-  completed_plans: 11
-  percent: 73
+  completed_plans: 12
+  percent: 92
 ---
 
 # State: RPi VPN Gateway
@@ -20,13 +20,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Non-RU traffic exits through AmneziaWG VPN; RU traffic exits direct via ISP — transparent to LAN devices, survives reboots, fully reversible.
-**Current focus:** Phase 05 — custom-route-exceptions-ip
+**Current focus:** Phase 06 — Documentation
 
 ## Current Phase
 
-**Phase 4: Traffic Logging & Visibility — COMPLETE ✓**
+**Phase 5: Custom Route Exceptions — COMPLETE ✓**
 
-Verified on live RPi 2026-05-21.
+All deploy tooling (vpn-status.sh --via, deploy.sh Stage 21, example template) wired 2026-05-21.
 
 ## Phase Progress
 
@@ -36,7 +36,7 @@ Verified on live RPi 2026-05-21.
 | 2 — Routing & NAT | ✓ Complete | 2/2 done | 100% |
 | 3 — Autostart, Cron & Rollback | ✓ Complete | 3/3 done | 100% |
 | 4 — Traffic Logging & Visibility | ✓ Complete | 3/3 done | 100% |
-| 5 — Custom Route Exceptions | → In Progress | 1/2 | 50% |
+| 5 — Custom Route Exceptions | ✓ Complete | 2/2 done | 100% |
 | 6 — Documentation | ○ Pending | 0/? | 0% |
 
 ## Requirements
@@ -64,6 +64,8 @@ Verified on live RPi 2026-05-21.
 - deploy.sh D-12: --no-run flag skips routing.sh activation; without it, routing.sh runs automatically after deploy
 - Phase 5 D-06/D-08: routing.sh renames SUBNET_FILE → WHITE_LIST_FILE (/etc/white-list.txt); Stage 5b added to load /etc/white-list-extended.txt when present (silent skip when absent)
 - Phase 5 D-14: vpn-rollback.sh Step 4c added — rm -f /etc/white-list-extended.txt; /etc/white-list.txt preserved (not removed) during rollback
+- Phase 5 D-10/D-11: vpn-status.sh --via=vpn|isp filter applied at output time (not entry collection); strict string validation; composes with --filter/--device/--last
+- Phase 5 deploy: deploy.sh TOTAL_STAGES=22; Stage 21 conditionally SCPs exception file (skip if absent); Stage 22 activation drops --no-update for first-deploy correctness
 
 ## Hardware Verified
 
@@ -74,13 +76,13 @@ Verified on live RPi 2026-05-21.
 
 ## Last Session
 
-**Stopped at:** Completed 05-01-PLAN.md — RPi-side rename + Stage 5b loader + rollback cleanup
-**Timestamp:** 2026-05-21T13:56:00Z
-**Resume:** Run /gsd:execute-phase 05 Plan 02 — vpn-status.sh --via + deploy.sh stage + example file
+**Stopped at:** Completed 05-02-PLAN.md — vpn-status.sh --via flag, deploy.sh Stage 21, example template; Phase 5 complete
+**Timestamp:** 2026-05-21T14:35:00Z
+**Resume:** Run /gsd:execute-phase 06 — Documentation (ops runbook)
 
 ---
 *Initialized: 2026-05-18*
-*Updated: 2026-05-21 — Phase 4 complete; deploy.sh at TOTAL_STAGES=20; split tunneling verified on live network*
+*Updated: 2026-05-21 — Phase 5 complete; deploy.sh at TOTAL_STAGES=22; --via flag in vpn-status.sh; exception file deploy staged*
 
 ## Quick Tasks Completed
 

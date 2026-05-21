@@ -14,7 +14,7 @@
 | 2 | Routing & NAT | Split-tunnel routing active, LAN devices NATed through RPi | ROUT-01–04, NAT-01–03 | 6 |
 | 3 | Autostart, Cron & Rollback | Survives reboots, daily refresh, one-command rollback | AUTO-01–03, ROLL-01–02, VRFY-01–04 | 4 |
 | 4 | Traffic Logging & Visibility | 3/3 | Complete   | 2026-05-21 |
-| 5 | Custom Route Exceptions | Per-IP/CIDR overrides forcing traffic through ISP | TBD | TBD |
+| 5 | Custom Route Exceptions | 2/2 | Complete | 2026-05-21 |
 | 6 | Documentation | Ops runbook: deploy, verify, rollback, add exceptions — one source of truth | TBD | TBD |
 
 ---
@@ -184,7 +184,7 @@
 **Goal:** Add user-defined per-CIDR ISP-bypass exceptions on top of the auto-downloaded RU CIDR list; rename /etc/vpn-ru-subnets.txt → /etc/white-list.txt for naming parity; extend vpn-status.sh with --via=vpn|isp filter for the discover→exception workflow
 **Requirements**: TBD
 **Depends on:** Phase 4
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 **Wave 1**
@@ -193,7 +193,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 05-02-PLAN.md — Wave 2: vpn-status.sh --via=vpn|isp filter (D-10, D-11); deploy.sh new conditional stage for configs/white-list-extended.txt (D-12, D-13); configs/white-list-extended.txt.example committed; .gitignore the user file; drop --no-update from final activation (Pitfall 2 fix)
+- [x] 05-02-PLAN.md — Wave 2: vpn-status.sh --via=vpn|isp filter (D-10, D-11); deploy.sh Stage 21 conditional exception file deploy (D-12, D-13); configs/white-list-extended.txt.example committed; .gitignore the user file; --no-update dropped from Stage 22 activation (Pitfall 2 fix) ✓ 2026-05-21
 
 ### Phase 6: Documentation
 
@@ -208,4 +208,4 @@ Plans:
 
 ---
 *Created: 2026-05-18*
-*Updated: 2026-05-21 — Phase 5 plans created (05-01 RPi-side rename + Stage 5b loader + rollback cleanup; 05-02 vpn-status --via + deploy stage + example file + gitignore + --no-update drop)*
+*Updated: 2026-05-21 — Phase 5 complete (05-01 RPi-side rename + Stage 5b loader + rollback cleanup; 05-02 vpn-status --via + deploy Stage 21 + example file + gitignore + --no-update drop)*
