@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 5 context gathered
-last_updated: "2026-05-21T13:14:39.208Z"
+stopped_at: Completed 05-01-PLAN.md (RPi-side rename + Stage 5b loader + rollback cleanup)
+last_updated: "2026-05-21T13:56:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 12
-  completed_plans: 10
-  percent: 67
+  completed_plans: 11
+  percent: 73
 ---
 
 # State: RPi VPN Gateway
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Non-RU traffic exits through AmneziaWG VPN; RU traffic exits direct via ISP — transparent to LAN devices, survives reboots, fully reversible.
-**Current focus:** Phase 05 — custom-route-exceptions
+**Current focus:** Phase 05 — custom-route-exceptions-ip
 
 ## Current Phase
 
@@ -36,7 +36,7 @@ Verified on live RPi 2026-05-21.
 | 2 — Routing & NAT | ✓ Complete | 2/2 done | 100% |
 | 3 — Autostart, Cron & Rollback | ✓ Complete | 3/3 done | 100% |
 | 4 — Traffic Logging & Visibility | ✓ Complete | 3/3 done | 100% |
-| 5 — Custom Route Exceptions | ○ Pending | 0/? | 0% |
+| 5 — Custom Route Exceptions | → In Progress | 1/2 | 50% |
 | 6 — Documentation | ○ Pending | 0/? | 0% |
 
 ## Requirements
@@ -62,6 +62,8 @@ Verified on live RPi 2026-05-21.
 - routing.sh D-07: iptables idempotency via iptables -C check before every -A — no duplicate MASQUERADE rules
 - deploy.sh D-11: routing.sh deployed via SCP /tmp staging then sudo mv + chmod +x (matches Phase 1 pattern)
 - deploy.sh D-12: --no-run flag skips routing.sh activation; without it, routing.sh runs automatically after deploy
+- Phase 5 D-06/D-08: routing.sh renames SUBNET_FILE → WHITE_LIST_FILE (/etc/white-list.txt); Stage 5b added to load /etc/white-list-extended.txt when present (silent skip when absent)
+- Phase 5 D-14: vpn-rollback.sh Step 4c added — rm -f /etc/white-list-extended.txt; /etc/white-list.txt preserved (not removed) during rollback
 
 ## Hardware Verified
 
@@ -72,9 +74,9 @@ Verified on live RPi 2026-05-21.
 
 ## Last Session
 
-**Stopped at:** Phase 5 context gathered
-**Timestamp:** 2026-05-21T11:00:00Z
-**Resume:** Run /gsd:plan-phase 5 — Custom Route Exceptions
+**Stopped at:** Completed 05-01-PLAN.md — RPi-side rename + Stage 5b loader + rollback cleanup
+**Timestamp:** 2026-05-21T13:56:00Z
+**Resume:** Run /gsd:execute-phase 05 Plan 02 — vpn-status.sh --via + deploy.sh stage + example file
 
 ---
 *Initialized: 2026-05-18*

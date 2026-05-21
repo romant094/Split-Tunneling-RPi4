@@ -189,7 +189,7 @@
 Plans:
 **Wave 1**
 
-- [ ] 05-01-PLAN.md — Wave 1: routing.sh rename SUBNET_FILE → WHITE_LIST_FILE + Stage 5b loader for /etc/white-list-extended.txt; update-vpn-routes path rename; vpn-rollback.sh rm white-list-extended + summary rename (D-06, D-07, D-08, D-09, D-14)
+- [x] 05-01-PLAN.md — Wave 1: routing.sh rename SUBNET_FILE → WHITE_LIST_FILE + Stage 5b loader for /etc/white-list-extended.txt; update-vpn-routes path rename; vpn-rollback.sh rm white-list-extended + summary rename (D-06, D-07, D-08, D-09, D-14) ✓ 2026-05-21
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
