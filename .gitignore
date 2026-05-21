@@ -4,3 +4,7 @@
 # Phase 1: VPN secrets — never commit
 .env.secrets
 /awg0.conf
+
+# Python bytecode cache
+__pycache__/
+*.pyc
