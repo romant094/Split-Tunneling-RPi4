@@ -5,6 +5,9 @@
 .env.secrets
 /awg0.conf
 
+# Phase 5: user-defined ISP-bypass exceptions — never commit
+configs/white-list-extended.txt
+
 # Python bytecode cache
 __pycache__/
 *.pyc

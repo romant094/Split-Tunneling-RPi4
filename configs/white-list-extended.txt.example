@@ -1,0 +1,27 @@
+# configs/white-list-extended.txt.example
+#
+# PURPOSE: User-defined ISP-bypass exceptions, loaded alongside the auto-downloaded
+# /etc/white-list.txt (Russian IP ranges from iplist). Each CIDR in this file will
+# be routed via KEENETIC_GW (ISP), bypassing the AmneziaWG VPN tunnel.
+#
+# FORMAT: One CIDR per line. No labels, no inline comments after a CIDR. This format
+# is identical to the iplist output used for /etc/white-list.txt. Trailing comments
+# on a CIDR line (e.g. "203.0.113.0/24 # my-service") are NOT supported — routing.sh
+# reads the whole line as the route argument, and ip route add will reject it. Use
+# whole-line comments only (lines starting with #).
+#
+# HOW TO USE:
+#   1. Run: ssh pi4 "sudo /etc/vpn-status.sh --via=vpn" to identify IPs exiting via VPN
+#   2. Resolve the destination IP to a CIDR (e.g. via whois or ipinfo.io)
+#   3. Copy this file to configs/white-list-extended.txt (note: configs/ is gitignored
+#      for the real file — configs/white-list-extended.txt will NOT be committed)
+#   4. Add your CIDRs to configs/white-list-extended.txt (one per line, no comments)
+#   5. Run: ./deploy.sh  — Stage 21 will SCP the file to /etc/white-list-extended.txt
+#      and routing.sh Stage 5b will load the routes on activation.
+#
+# VALIDATION: routing.sh trusts CIDR correctness. Malformed lines are silently dropped
+# by `ip route add` (2>/dev/null || true). No pre-validation is performed on deploy.
+#
+# EXAMPLE ENTRIES (commented out — remove the leading # to activate):
+# 23.55.0.0/16
+# 95.181.176.0/22
