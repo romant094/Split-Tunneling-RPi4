@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 05-02-PLAN.md — vpn-status.sh --via flag, deploy.sh Stage 21, example template
-last_updated: "2026-05-21T14:35:00.000Z"
+status: Phase 05 complete
+stopped_at: Phase 6 context gathered
+last_updated: "2026-05-21T15:02:28.335Z"
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 12
   completed_plans: 12
-  percent: 92
+  percent: 83
 ---
 
 # State: RPi VPN Gateway
@@ -76,7 +76,7 @@ All deploy tooling (vpn-status.sh --via, deploy.sh Stage 21, example template) w
 
 ## Last Session
 
-**Stopped at:** Completed 05-02-PLAN.md — vpn-status.sh --via flag, deploy.sh Stage 21, example template; Phase 5 complete
+**Stopped at:** Phase 6 context gathered
 **Timestamp:** 2026-05-21T14:35:00Z
 **Resume:** Run /gsd:execute-phase 06 — Documentation (ops runbook)
 
