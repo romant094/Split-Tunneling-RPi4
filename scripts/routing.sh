@@ -116,6 +116,11 @@ log "Subnet file valid: ${SUBNET_COUNT} lines in ${SUBNET_FILE}"
 # ip route flush dev <iface> removes ALL routes using awg0 (including default via awg0).
 # The VPN server host route lives in the main table via ISP (not via awg0), so we
 # delete it separately.
+log "Stage 3: Flushing LOG rules (if present)..."
+iptables -C FORWARD -o "${VPN_IFACE}" -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[VPN] " --log-level 6 2>/dev/null && \
+    iptables -D FORWARD -o "${VPN_IFACE}" -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[VPN] " --log-level 6 || true
+iptables -C FORWARD -o eth0 -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[ISP] " --log-level 6 2>/dev/null && \
+    iptables -D FORWARD -o eth0 -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[ISP] " --log-level 6 || true
 log "Stage 3: Flushing existing VPN routes (D-06)..."
 ip route flush dev "${VPN_IFACE}" 2>/dev/null || true
 ip route del "${VPN_SERVER_IP}/32" 2>/dev/null || true
@@ -176,6 +181,29 @@ else
     log "MASQUERADE on eth0: added"
 fi
 
+# ─── Stage 7b: iptables LOG rules (D-01–D-05) ──────────────────────────────────
+# D-01: FORWARD chain only (LAN device traffic through RPi; not RPi's own OUTPUT traffic)
+# D-02: --state NEW — log connection initiations only, not every packet in the session
+# D-03: --limit 10/min --limit-burst 20 — rate cap to prevent flood from streaming/gaming
+# D-04: iptables -C idempotency guard before every -A (mirrors Stage 7 pattern)
+# D-05: --log-level 6 → syslog info → journald; no separate log file needed
+
+log "Stage 7b: Configuring iptables LOG rules (D-01–D-05)..."
+
+if iptables -C FORWARD -o "${VPN_IFACE}" -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[VPN] " --log-level 6 2>/dev/null; then
+    log "LOG rule [VPN] on ${VPN_IFACE}: already present (no change)"
+else
+    iptables -A FORWARD -o "${VPN_IFACE}" -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[VPN] " --log-level 6
+    log "LOG rule [VPN] on ${VPN_IFACE}: added"
+fi
+
+if iptables -C FORWARD -o eth0 -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[ISP] " --log-level 6 2>/dev/null; then
+    log "LOG rule [ISP] on eth0: already present (no change)"
+else
+    iptables -A FORWARD -o eth0 -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[ISP] " --log-level 6
+    log "LOG rule [ISP] on eth0: added"
+fi
+
 # ─── Stage 8: iptables-persistent (NAT-03) ────────────────────────────────────
 # Install iptables-persistent if not already installed; save rules so they survive reboot.
 # T-02-05: DEBIAN_FRONTEND=noninteractive prevents any interactive prompts during apt install.
@@ -217,4 +245,5 @@ log "  VPN server:      ${VPN_SERVER_IP}/32 via ${KEENETIC_GW} (loop prevention)
 log "  RU subnets:      ${ADDED} routes via ${KEENETIC_GW}"
 log "  Default:         dev ${VPN_IFACE} (all other traffic → VPN)"
 log "  iptables rules:  ${IPTABLES_RULES}"
+log "  iptables LOG:    [VPN] on ${VPN_IFACE}, [ISP] on eth0 (NEW only, 10/min limit)"
 log "──────────────────────────────────────────────"
