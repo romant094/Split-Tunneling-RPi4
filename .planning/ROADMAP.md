@@ -13,7 +13,7 @@
 | 1 | Foundation & Config | AmneziaWG running, config deployed | INST-01, INST-02, CONF-01, CONF-02 | 4 |
 | 2 | Routing & NAT | Split-tunnel routing active, LAN devices NATed through RPi | ROUT-01–04, NAT-01–03 | 6 |
 | 3 | Autostart, Cron & Rollback | Survives reboots, daily refresh, one-command rollback | AUTO-01–03, ROLL-01–02, VRFY-01–04 | 4 |
-| 4 | Traffic Logging & Visibility | 2/3 | In Progress|  |
+| 4 | Traffic Logging & Visibility | 3/3 | Complete   | 2026-05-21 |
 | 5 | Custom Route Exceptions | Per-IP/domain overrides forcing traffic through ISP | TBD | TBD |
 | 6 | Documentation | Ops runbook: deploy, verify, rollback, add exceptions — one source of truth | TBD | TBD |
 
@@ -152,14 +152,14 @@
 **Goal:** Log per-connection routing decisions (VPN vs ISP), visible subnets, and resolved domain names
 **Requirements**: TBD
 **Depends on:** Phase 3
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 **Wave 1:**
 - [x] 04-01-PLAN.md — iptables LOG rules in scripts/routing.sh ([VPN]/[ISP] on FORWARD chain, --state NEW, rate limited)
 - [x] 04-02-PLAN.md — configs/dnsmasq.conf + scripts/vpn-status.sh (connection visibility query tool)
 
 **Wave 2** *(blocked on Wave 1 completion)*:
-- [ ] 04-03-PLAN.md — deploy.sh Stages 17–20 + vpn-rollback.sh Phase 4 teardown
+- [x] 04-03-PLAN.md — deploy.sh Stages 17–20 + vpn-rollback.sh Phase 4 teardown (completed 2026-05-21)
 
 **Cross-cutting constraints:**
 - iptables LOG rule flag sets must be identical in routing.sh (add) and vpn-rollback.sh (remove)
