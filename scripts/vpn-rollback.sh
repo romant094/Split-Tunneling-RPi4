@@ -81,8 +81,16 @@ if iptables -t nat -C POSTROUTING -o eth0 -j MASQUERADE 2>/dev/null; then
     log "MASQUERADE on eth0: removed"
 fi
 
-# ─── Step 4b: Remove iptables LOG rules (D-21, Phase 4) ──────────────────────────
-# Mirrors Step 4 -C before -D pattern. Flag set must be identical to routing.sh Stage 7b.
+# ─── Step 4b: Remove FORWARD ACCEPT and LOG rules (Phase 4) ─────────────────────
+log "Removing FORWARD ACCEPT rules..."
+if iptables -C FORWARD -i eth0 -j ACCEPT 2>/dev/null; then
+    iptables -D FORWARD -i eth0 -j ACCEPT
+    log "FORWARD ACCEPT -i eth0: removed"
+fi
+if iptables -C FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null; then
+    iptables -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+    log "FORWARD ACCEPT RELATED,ESTABLISHED: removed"
+fi
 log "Removing iptables LOG rules (Phase 4)..."
 if iptables -C FORWARD -o "${VPN_IFACE}" -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[VPN] " --log-level 6 2>/dev/null; then
     iptables -D FORWARD -o "${VPN_IFACE}" -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[VPN] " --log-level 6

@@ -116,7 +116,11 @@ log "Subnet file valid: ${SUBNET_COUNT} lines in ${SUBNET_FILE}"
 # ip route flush dev <iface> removes ALL routes using awg0 (including default via awg0).
 # The VPN server host route lives in the main table via ISP (not via awg0), so we
 # delete it separately.
-log "Stage 3: Flushing LOG rules (if present)..."
+log "Stage 3: Flushing FORWARD ACCEPT and LOG rules (if present)..."
+iptables -C FORWARD -i eth0 -j ACCEPT 2>/dev/null && \
+    iptables -D FORWARD -i eth0 -j ACCEPT || true
+iptables -C FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null && \
+    iptables -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT || true
 iptables -C FORWARD -o "${VPN_IFACE}" -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[VPN] " --log-level 6 2>/dev/null && \
     iptables -D FORWARD -o "${VPN_IFACE}" -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[VPN] " --log-level 6 || true
 iptables -C FORWARD -o eth0 -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[ISP] " --log-level 6 2>/dev/null && \
@@ -181,14 +185,33 @@ else
     log "MASQUERADE on eth0: added"
 fi
 
-# ─── Stage 7b: iptables LOG rules (D-01–D-05) ──────────────────────────────────
+# ─── Stage 7b: iptables FORWARD ACCEPT rules ─────────────────────────────────
+# FORWARD chain default policy is DROP (Docker sets this). Without these ACCEPT rules
+# all LAN device traffic through the RPi is silently dropped.
+log "Stage 7b: Configuring FORWARD ACCEPT rules for LAN traffic..."
+
+if iptables -C FORWARD -i eth0 -j ACCEPT 2>/dev/null; then
+    log "FORWARD ACCEPT -i eth0: already present (no change)"
+else
+    iptables -A FORWARD -i eth0 -j ACCEPT
+    log "FORWARD ACCEPT -i eth0: added"
+fi
+
+if iptables -C FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null; then
+    log "FORWARD ACCEPT RELATED,ESTABLISHED: already present (no change)"
+else
+    iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+    log "FORWARD ACCEPT RELATED,ESTABLISHED: added"
+fi
+
+# ─── Stage 7c: iptables LOG rules (D-01–D-05) ──────────────────────────────────
 # D-01: FORWARD chain only (LAN device traffic through RPi; not RPi's own OUTPUT traffic)
 # D-02: --state NEW — log connection initiations only, not every packet in the session
 # D-03: --limit 10/min --limit-burst 20 — rate cap to prevent flood from streaming/gaming
 # D-04: iptables -C idempotency guard before every -A (mirrors Stage 7 pattern)
 # D-05: --log-level 6 → syslog info → journald; no separate log file needed
 
-log "Stage 7b: Configuring iptables LOG rules (D-01–D-05)..."
+log "Stage 7c: Configuring iptables LOG rules (D-01–D-05)..."
 
 if iptables -C FORWARD -o "${VPN_IFACE}" -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[VPN] " --log-level 6 2>/dev/null; then
     log "LOG rule [VPN] on ${VPN_IFACE}: already present (no change)"
