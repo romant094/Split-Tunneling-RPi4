@@ -56,8 +56,11 @@ VPN_STATUS_TMP="/tmp/vpn-status.sh.tmp"
 WATCH_ROUTES_LOCAL="scripts/watch-routes.py"
 WATCH_ROUTES_REMOTE="/etc/watch-routes.py"
 WATCH_ROUTES_TMP="/tmp/watch-routes.py.tmp"
+WHITE_LIST_EXT_LOCAL="configs/white-list-extended.txt"
+WHITE_LIST_EXT_REMOTE="/etc/white-list-extended.txt"
+WHITE_LIST_EXT_TMP="/tmp/white-list-extended.tmp"
 
-TOTAL_STAGES=21
+TOTAL_STAGES=22
 
 # ─── Argument Parsing (D-12) ─────────────────────────────────────────────────
 RUN_ROUTING=true
@@ -341,10 +344,20 @@ scp -o BatchMode=yes "${WATCH_ROUTES_LOCAL}" "${SSH_HOST}:${WATCH_ROUTES_TMP}"
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${WATCH_ROUTES_TMP} ${WATCH_ROUTES_REMOTE} && sudo chmod +x ${WATCH_ROUTES_REMOTE} && sudo chown root:root ${WATCH_ROUTES_REMOTE}"
 echo "       watch-routes.py deployed (chmod +x, root:root)."
 
-# ─── Stage 21: Activate Phase 4 LOG rules via routing.sh (D-18, D-04) ────────
-echo "[21/${TOTAL_STAGES}] Activating Phase 4 LOG rules via routing.sh on ${SSH_HOST}..."
-ssh -o BatchMode=yes "${SSH_HOST}" "sudo ${ROUTING_SH_REMOTE} --no-update"
-echo "       routing.sh re-run complete — [VPN] and [ISP] LOG rules active."
+# ─── Stage 21: Deploy white-list-extended.txt to RPi (D-05, D-12, D-13) ─────
+echo "[21/${TOTAL_STAGES}] Deploying white-list-extended.txt to ${SSH_HOST} (if present)..."
+if [[ -f "${WHITE_LIST_EXT_LOCAL}" ]]; then
+    scp -o BatchMode=yes "${WHITE_LIST_EXT_LOCAL}" "${SSH_HOST}:${WHITE_LIST_EXT_TMP}"
+    ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${WHITE_LIST_EXT_TMP} ${WHITE_LIST_EXT_REMOTE} && sudo chmod 644 ${WHITE_LIST_EXT_REMOTE} && sudo chown root:root ${WHITE_LIST_EXT_REMOTE}"
+    echo "       white-list-extended.txt deployed (mode 644, root:root)."
+else
+    echo "       ${WHITE_LIST_EXT_LOCAL} not found in repo — skipping exception file deploy (D-05)."
+fi
+
+# ─── Stage 22: Activate Phase 5 routes via routing.sh (D-18, D-04, D-06/P5) ──
+echo "[22/${TOTAL_STAGES}] Activating routes via routing.sh on ${SSH_HOST}..."
+ssh -o BatchMode=yes "${SSH_HOST}" "sudo ${ROUTING_SH_REMOTE}"
+echo "       routing.sh re-run complete — [VPN] and [ISP] LOG rules active; exception routes loaded if present."
 
 # ─── Final Summary ───────────────────────────────────────────────────────────
 # Tunnel bring-up is NOT automated — RESEARCH.md Pitfall 5 (awg-quick up is not idempotent)
@@ -367,6 +380,7 @@ echo "   PHASE 4: ${DNSMASQ_CONF_REMOTE} (mode 644, root:root)"
 echo "   PHASE 4: ${VPN_STATUS_REMOTE} (chmod +x, root:root)"
 echo "   PHASE 4: ${WATCH_ROUTES_REMOTE} (chmod +x, root:root)"
 echo "   PHASE 4: iptables LOG rules [VPN] + [ISP] active (via routing.sh)"
+echo "   PHASE 5: ${WHITE_LIST_EXT_REMOTE} (mode 644, root:root, optional — deployed only if ${WHITE_LIST_EXT_LOCAL} exists)"
 echo ""
 echo " Next steps (run manually — tunnel bring-up is intentionally NOT automated):"
 echo ""
@@ -430,8 +444,17 @@ echo "   # expect: kernel lines with SRC= DST= and [VPN] or [ISP] prefix"
 echo "   sudo ${WATCH_ROUTES_REMOTE} --src <device-ip>"
 echo "   # real-time enriched view: [VPN]/[ISP] + reverse-DNS hostnames"
 echo "   # Idempotency check (must not duplicate LOG rules):"
-echo "   ssh pi4 \"sudo /etc/routing.sh --no-update && sudo iptables -L FORWARD -n -v | grep -c LOG\""
+echo "   ssh pi4 \"sudo /etc/routing.sh && sudo iptables -L FORWARD -n -v | grep -c LOG\""
 echo "   # expect: 2"
 echo "   # Keenetic manual step: Home network -> Segments -> DNS server -> 192.168.1.254"
 echo "   # Without this dnsmasq won't receive queries and domain column shows raw IPs"
+echo ""
+echo " Phase 5 verification:"
+echo "   ssh pi4 \"sudo /etc/vpn-status.sh --via=vpn\""
+echo "   # expect: only rows with VPN in the PATH column (or empty if no VPN traffic)"
+echo "   ssh pi4 \"sudo /etc/vpn-status.sh --via=isp\""
+echo "   # expect: only rows with ISP in the PATH column"
+echo "   ssh pi4 \"ls -l /etc/white-list-extended.txt 2>/dev/null || echo 'no exception file present'\""
+echo "   ssh pi4 \"sudo /etc/routing.sh && ip route get <YOUR-EXCEPTION-CIDR-IP>\""
+echo "   # expect: route via 192.168.1.1 (KEENETIC_GW) for any IP inside an exception CIDR"
 echo "================================================================"
