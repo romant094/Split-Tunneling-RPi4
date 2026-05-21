@@ -80,6 +80,12 @@ Verified on live RPi 2026-05-21.
 *Initialized: 2026-05-18*
 *Updated: 2026-05-21 — Phase 4 complete; deploy.sh at TOTAL_STAGES=20; split tunneling verified on live network*
 
+## Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260521-jex | Add scripts/watch-routes.py — real-time iptables log viewer with reverse DNS caching | 2026-05-21 | cf6bafa | [260521-jex-add-scripts-watch-routes-py-real-time-ip](./quick/260521-jex-add-scripts-watch-routes-py-real-time-ip/) |
+
 ## Accumulated Context
 
 ### Roadmap Evolution
