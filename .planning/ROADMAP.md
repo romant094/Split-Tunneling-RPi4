@@ -198,7 +198,7 @@ Plans:
 ### Phase 6: Documentation
 
 **Goal:** Ops runbook covering all phases — how to deploy, verify routing, rollback, add custom exceptions, and interpret traffic logs; each major script and workflow documented with examples
-**Requirements**: TBD
+**Requirements**: Every subsequent phase (7+) that adds scripts, flags, or workflows must update README.md and docs/README.ru.md accordingly before the phase is considered complete.
 **Depends on:** Phase 5
 **Plans:** 2 plans
 
@@ -211,6 +211,16 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*:
 
 - [ ] 06-02-PLAN.md — docs/README.ru.md: full Russian translation of README.md
+
+### Phase 7: ASN Enrichment & Traffic Attribution
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 6
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 7 to break down)
 
 ---
 *Created: 2026-05-18*

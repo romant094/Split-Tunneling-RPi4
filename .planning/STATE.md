@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Phase 06 planned
-stopped_at: Phase 6 ready to execute
-last_updated: "2026-05-21T17:00:00.000Z"
+stopped_at: Phase 6 planned — 2 plans in 2 waves
+last_updated: "2026-05-22T11:07:44.881Z"
 progress:
-  total_phases: 6
+  total_phases: 7
   completed_phases: 5
   total_plans: 14
   completed_plans: 12
-  percent: 86
+  percent: 71
 ---
 
 # State: RPi VPN Gateway
@@ -97,6 +97,7 @@ All deploy tooling (vpn-status.sh --via, deploy.sh Stage 21, example template) w
 - Phase 4 added: Traffic Logging & Visibility — per-connection route logging (VPN/ISP), subnets, domain names
 - Phase 5 added: Custom Route Exceptions — per-IP/domain overrides forcing traffic through ISP
 - Phase 6 added: Documentation — ops runbook (deploy, verify, rollback, add exceptions)
+- Phase 7 added: ASN Enrichment & Traffic Attribution
 
 ### Phase 4 Post-execution Fixes (applied after plans, discovered during live testing)
 
