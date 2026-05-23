@@ -13,21 +13,21 @@ the RPi, which splits it into two paths:
 
 - **Non-RU traffic** exits through the AmneziaWG VPN tunnel (`awg0`).
 - **Russian IP ranges** (downloaded daily from `russia.iplist.opencck.org`) exit direct via the
-  ISP gateway (Keenetic at `192.168.1.1`).
+  ISP gateway (router at `192.168.1.1`).
 - **Custom exceptions** (`/etc/white-list-extended.txt`) can force additional CIDRs via ISP.
 - **VPN server host route** (`84.32.100.60/32`) is always kept via ISP to prevent a routing loop.
 
-LAN devices are configured to use the RPi as their gateway via a Keenetic DHCP option. They
+LAN devices are configured to use the RPi as their gateway via a router DHCP option. They
 require no individual configuration — the split is fully transparent.
 
 ```
 Internet
   ↓
-Keenetic (192.168.1.1) — ISP uplink
+Router (192.168.1.1) — ISP uplink
   ↓ eth0
 RPi4 (192.168.1.254) — VPN gateway
   ↓
-LAN devices (default gateway = 192.168.1.254 via Keenetic DHCP)
+LAN devices (default gateway = 192.168.1.254 via router DHCP)
 
 Traffic routing:
   Non-RU → awg0 → AmneziaWG VPN (endpoint: 84.32.100.60:36348)
@@ -39,7 +39,7 @@ Key environment variables (from `/etc/vpn-gateway.env` on the RPi, sourced from 
 | Variable | Value | Description |
 |----------|-------|-------------|
 | `RPI_LAN_IP` | `192.168.1.254` | RPi LAN IP address |
-| `KEENETIC_GW` | `192.168.1.1` | ISP gateway (Keenetic router) |
+| `KEENETIC_GW` | `192.168.1.1` | ISP gateway (your router) |
 | `VPN_SERVER_IP` | `84.32.100.60` | AmneziaWG server endpoint IP |
 | `VPN_IFACE` | `awg0` | VPN tunnel interface name |
 | `LAN_SUBNET` | `192.168.1.0/24` | Local LAN subnet |
@@ -85,12 +85,12 @@ Each key must be a valid 44-character base64 string (43 alphanumeric chars + one
 via a sed pipeline. The rendered config is written to a mode-600 temp file and SCPed to
 `/etc/amnezia/amneziawg/awg0.conf` (mode 600, root:root) on the RPi.
 
-### Keenetic DHCP
+### Router DHCP
 
-After the RPi is fully deployed and verified, configure Keenetic to advertise it as the
+After the RPi is fully deployed and verified, configure your router to advertise it as the
 LAN gateway:
 
-1. Open Keenetic web UI: `http://192.168.1.1`
+1. Open your router web UI: `http://192.168.1.1`
 2. Home network → Segments → Default → IP parameters
 3. Set **Gateway address** to `192.168.1.254`
 4. Save
@@ -99,7 +99,7 @@ After saving, LAN devices will use the RPi as their gateway on next DHCP lease r
 To apply immediately: disconnect/reconnect Wi-Fi, or run `ipconfig /renew` on Windows.
 
 **DNS for domain resolution:** To enable domain name display in `vpn-status.sh`, also set
-the DNS server in Keenetic:
+the DNS server in your router:
 
 1. Home network → Segments → Default → DNS server
 2. Set to `192.168.1.254` (dnsmasq on the RPi)
@@ -107,7 +107,7 @@ the DNS server in Keenetic:
 
 Without this step, the DOMAIN column in `vpn-status.sh` will show raw IPs.
 
-**Rollback:** Clear the Gateway address field in Keenetic (set it back to empty or `192.168.1.1`).
+**Rollback:** Clear the Gateway address field in your router (set it back to empty or `192.168.1.1`).
 
 ---
 
@@ -227,7 +227,7 @@ May 23 11:36:22      192.168.1.175      77.88.8.8          yandex.ru            
 May 23 11:36:23      192.168.1.100      104.64.0.0         store.steampowered.com                   VPN
 ```
 
-If the DOMAIN column shows raw IPs, set Keenetic DNS to `192.168.1.254` (see Prerequisites).
+If the DOMAIN column shows raw IPs, set router DNS to `192.168.1.254` (see Prerequisites).
 
 ### Autostart checks
 
@@ -289,7 +289,7 @@ ssh pi4 "sudo journalctl -t vpn-routes -n 5 --no-pager"
 
 ### DNS note
 
-`dnsmasq` on the RPi (`192.168.1.254`) must be set as the DNS server in Keenetic for domain
+`dnsmasq` on the RPi (`192.168.1.254`) must be set as the DNS server in your router for domain
 resolution to work in `vpn-status.sh`. Without it, all queries go directly to the upstream DNS
 resolver, bypassing dnsmasq's query log, and the DOMAIN column will show raw IPs.
 
@@ -397,9 +397,9 @@ Note: `/etc/dnsmasq.conf` and `/etc/vpn-status.sh` remain on disk but dnsmasq is
 
 ### After rollback
 
-Revert the Keenetic DHCP gateway back to `192.168.1.1`:
+Revert the router DHCP gateway back to `192.168.1.1`:
 
-1. Open Keenetic web UI: `http://192.168.1.1`
+1. Open your router web UI: `http://192.168.1.1`
 2. Home network → Segments → Default → IP parameters
 3. Clear the Gateway address field (or set to `192.168.1.1`)
 4. Save
@@ -641,11 +641,11 @@ Fix: Re-run `sudo /etc/routing.sh` — Stage 7b adds LOG rules; Stage 7c adds AC
 
 ---
 
-**Keenetic router web UI / Keenetic app becomes inaccessible from LAN devices**
+**Router web UI / app becomes inaccessible from LAN devices**
 
 Symptom: Cannot reach `http://192.168.1.1` from LAN devices after RPi is configured as gateway.
 
-Cause: An unconstrained MASQUERADE rule on `eth0` rewrites source IPs for all outbound traffic — including intra-LAN traffic to `192.168.1.1`. Keenetic sees all requests as coming from `192.168.1.254` and blocks them.
+Cause: An unconstrained MASQUERADE rule on `eth0` rewrites source IPs for all outbound traffic — including intra-LAN traffic to `192.168.1.1`. The router sees all requests as coming from `192.168.1.254` and blocks them.
 
 Fix: `routing.sh` Stage 7 uses `! -d LAN_SUBNET` in the eth0 MASQUERADE rule, which excludes intra-LAN traffic from MASQUERADE. Re-run `sudo /etc/routing.sh` to restore the correct rule.
 
@@ -685,11 +685,11 @@ ssh pi4 "sudo systemctl restart awg-quick@awg0"
 
 Symptom: `vpn-status.sh` output shows `(no connections matched — try --last=200 or remove filters)` even though LAN devices are generating traffic.
 
-Cause (A): dnsmasq is not configured as the DNS server in Keenetic — queries bypass the RPi entirely, so dnsmasq has no log to correlate. (This does not directly suppress the `[VPN]`/`[ISP]` entries, but check this first.)
+Cause (A): dnsmasq is not configured as the DNS server in your router — queries bypass the RPi entirely, so dnsmasq has no log to correlate. (This does not directly suppress the `[VPN]`/`[ISP]` entries, but check this first.)
 
-Cause (B): The LAN device has not renewed its DHCP lease since the Keenetic gateway was changed — it is still using its old gateway (e.g. `192.168.1.1` directly) and traffic does not pass through the RPi.
+Cause (B): The LAN device has not renewed its DHCP lease since the router gateway was changed — it is still using its old gateway (e.g. `192.168.1.1` directly) and traffic does not pass through the RPi.
 
-Fix: In Keenetic: Home network → Segments → Default → IP parameters → set Gateway address to `192.168.1.254`. Then renew the DHCP lease on the LAN device (disconnect/reconnect Wi-Fi, or `ipconfig /renew` on Windows). Also set DNS server to `192.168.1.254` while in that settings page.
+Fix: In your router web UI: navigate to DHCP/LAN settings → set Gateway address to `192.168.1.254`. Then renew the DHCP lease on the LAN device (disconnect/reconnect Wi-Fi, or `ipconfig /renew` on Windows). Also set DNS server to `192.168.1.254` in the same settings page.
 
 ---
 
@@ -699,15 +699,15 @@ Symptom: The DOMAIN column in `vpn-status.sh` output shows IP addresses instead 
 
 Cause: dnsmasq is not the DNS server for LAN devices. DNS queries go directly to an upstream resolver, bypassing dnsmasq's query log. Without dnsmasq log entries, `vpn-status.sh` cannot correlate DST IPs to domain names; rDNS fallback also fails for CDN IPs (no PTR records).
 
-Fix: Set Keenetic DNS server to `192.168.1.254` (see Prerequisites → Keenetic DHCP). After renewal, LAN DNS queries flow through dnsmasq, which logs them for correlation.
+Fix: Set your router DNS server to `192.168.1.254` (see Prerequisites → Router DHCP). After renewal, LAN DNS queries flow through dnsmasq, which logs them for correlation.
 
 ---
 
-**Split-tunnel routes disappear after Keenetic reboots (NM carrier-change)**
+**Split-tunnel routes disappear after router reboots (NM carrier-change)**
 
 Symptom: VPN routing breaks after the router reboots or the eth0 link goes down and comes back up. `ssh pi4 "ip route show | wc -l"` drops to approximately 2 (only local routes). `ip route get 8.8.8.8` no longer shows `dev awg0`.
 
-Cause: When Keenetic reboots, the eth0 link drops (carrier-change event). NetworkManager (NM) flushes all eth0 routes on the link-down event — including the ~1360 RU CIDR routes and the VPN server host route added by `routing.sh`. When eth0 comes back up, only the local link route is restored by NM. Without the VPN server host route (`84.32.100.60/32 via 192.168.1.1`), `ip route get 84.32.100.60` resolves via `awg0` (policy table 51820), creating a routing loop. No VPN connection → no internet → the daily cron download also fails → the system cannot self-heal without intervention.
+Cause: When the router reboots, the eth0 link drops (carrier-change event). NetworkManager (NM) flushes all eth0 routes on the link-down event — including the ~1360 RU CIDR routes and the VPN server host route added by `routing.sh`. When eth0 comes back up, only the local link route is restored by NM. Without the VPN server host route (`84.32.100.60/32 via 192.168.1.1`), `ip route get 84.32.100.60` resolves via `awg0` (policy table 51820), creating a routing loop. No VPN connection → no internet → the daily cron download also fails → the system cannot self-heal without intervention.
 
 Fix: `deploy.sh` Stage 22 deploys `/etc/NetworkManager/dispatcher.d/10-vpn-routes` — an NM dispatcher script that automatically restores routes by running `routing.sh --no-update` in the background when `eth0 up` is detected.
 
