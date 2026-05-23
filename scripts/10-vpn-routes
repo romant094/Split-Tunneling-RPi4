@@ -1,0 +1,18 @@
+#!/bin/bash
+# /etc/NetworkManager/dispatcher.d/10-vpn-routes
+#
+# Restores VPN split-tunnel routes after eth0 reconnect.
+#
+# NetworkManager calls dispatcher scripts with: $1=interface $2=action
+# Triggered on: carrier-changed, DHCP renewal, or any eth0 down/up cycle.
+#
+# Must run routing.sh in background (&) — NM kills dispatcher scripts that block.
+# Logs to syslog (tag "vpn-routes") and /var/log/vpn-routes.log.
+
+IFACE="$1"
+ACTION="$2"
+
+if [[ "$IFACE" == "eth0" && "$ACTION" == "up" ]]; then
+    logger -t "vpn-routes" "eth0 up — restoring VPN split-tunnel routes"
+    /etc/routing.sh --no-update >> /var/log/vpn-routes.log 2>&1 &
+fi

@@ -38,8 +38,15 @@ source /etc/vpn-gateway.env
 log "Checking for RU subnet list update..."
 
 if ! curl -fsSL "${RU_SUBNET_URL}" -o "${SUBNET_TMP}" 2>/dev/null; then
-    log "Download failed — skipping update, routes unchanged"
+    log "Download failed — skipping subnet update"
     rm -f "${SUBNET_TMP}"
+    # NM carrier-change recovery: if VPN server host route is missing, routes were flushed
+    # (e.g. by NetworkManager after eth0 carrier-changed). Rebuild from existing file.
+    if [[ -f "${SUBNET_FILE}" ]] && ! ip route show | grep -q "${VPN_SERVER_IP}"; then
+        log "VPN server host route missing — rebuilding routes from existing ${SUBNET_FILE}"
+        /etc/routing.sh --no-update
+        log "Route rebuild complete"
+    fi
     exit 0  # Pattern 3: exit 0 on download failure — do NOT generate cron failure mail
 fi
 
