@@ -214,14 +214,22 @@ Plans:
 
 ### Phase 7: ASN Enrichment & Traffic Attribution
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Enrich existing traffic visibility tools (vpn-status.sh, watch-routes.py) with ISP/org attribution by mapping destination IPs to ASN + org name via Team Cymru bulk whois; ship a shared stdlib-only Python helper (asn-lookup.py) with a file-backed cache and graceful network-failure degradation; vpn-status.sh gains an ORG column + --summary aggregate view; watch-routes.py appends `| {org}` per line via a non-blocking background thread; deploy.sh extended with a new Stage 23 for the helper script
+**Requirements**: None mapped (v1 requirements complete; this is a visibility/UX enhancement phase). Per Phase 6 cross-cutting note, README.md and docs/README.ru.md must be updated to document the new ORG column, --summary flag, and --no-asn flag before Phase 7 is considered complete.
 **Depends on:** Phase 6
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 7 to break down)
+
+**Wave 1:**
+
+- [ ] 07-01-PLAN.md — scripts/asn-lookup.py: shared stdlib Cymru bulk-whois client + atomic /tmp/vpn-asn-cache.json file cache; CLI contract is stdin one-IP-per-line → stdout single-line JSON dict {ip:{asn,org}}; graceful degradation on network failure (D-01, D-02, D-04, D-09)
+
+**Wave 2** *(blocked on Wave 1 completion)*:
+
+- [ ] 07-02-PLAN.md — scripts/vpn-status.sh: add ORG column after DOMAIN (format `{org} (AS{asn})`) and --summary flag (ORG | VPN_COUNT | ISP_COUNT | TOTAL, top 20, ranked by TOTAL desc); seed asn-lookup.py with full pre-filter unique DST IP set (Pitfall 6); declare -A org_map (Pitfall 5); preserve all existing flags (D-03, D-06, D-07)
+- [ ] 07-03-PLAN.md — scripts/watch-routes.py: append ` | {org}` per line via background-thread subprocess call to /etc/asn-lookup.py (Pattern 3, threading.Lock-guarded _asn_cache, daemon thread, 5s timeout); add --no-asn opt-out flag; deploy.sh: add ASN_LOOKUP_* variables, preflight check, bump TOTAL_STAGES 23→24 (Pitfall 7), insert new Stage 23 deploy + renumber routing-activation to Stage 24, add PHASE 7 line to final summary (D-03, D-05, D-08)
 
 ---
 *Created: 2026-05-18*
-*Updated: 2026-05-21 — Phase 5 complete; Phase 6 plans created (06-01 English README, 06-02 Russian translation)*
+*Updated: 2026-05-23 — Phase 7 plans created (07-01 asn-lookup.py helper, 07-02 vpn-status.sh ORG+summary, 07-03 watch-routes.py threading + deploy Stage 23)*
