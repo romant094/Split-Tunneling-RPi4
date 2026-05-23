@@ -472,7 +472,7 @@ def format_line(ts, tag, src, dst, proto, dpt, no_dns, asn_cache=None):
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Subprocess vs direct import in watch-routes.py**
    - What we know: hyphenated filename prevents `import`; subprocess works but adds process overhead per lookup event
