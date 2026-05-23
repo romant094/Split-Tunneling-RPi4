@@ -1,0 +1,20 @@
+# configs/vpn-force.txt — VPN force-override list
+#
+# Deployed to /etc/vpn-force.txt on the RPi by deploy.sh.
+# Loaded by routing.sh Stage 5c AFTER the RU subnet list is applied.
+# Each CIDR is added via `ip route replace ... dev $VPN_IFACE`, overriding
+# any direct-ISP route that the RU subnet list may have assigned.
+#
+# Purpose: Google deploys GGC (Global Cache) nodes physically inside Russian
+# ISP networks. These IPs appear in russia.iplist.opencck.org and are routed
+# direct by Stage 5, but the ISP blocks them for blocked content (YouTube).
+# Forcing them through VPN restores access without modifying the RU list.
+#
+# How to update: find the offending CIDR with `ip route get <ip>`, trace it
+# back to the russian list with `grep <prefix> /etc/white-list.txt`, add here.
+
+# Google LLC (AS15169) — GGC ranges present in russian IP lists
+142.250.0.0/15
+74.125.0.0/16
+172.217.0.0/16
+216.58.0.0/16

@@ -37,6 +37,7 @@ set -euo pipefail
 # ─── Constants ────────────────────────────────────────────────────────────────
 WHITE_LIST_FILE="/etc/white-list.txt"
 EXCEPTIONS_FILE="/etc/white-list-extended.txt"
+VPN_FORCE_FILE="/etc/vpn-force.txt"
 SUBNET_TMP="/tmp/ru-subnets.tmp"
 IPTABLES_RULES="/etc/iptables/rules.v4"
 
@@ -182,6 +183,26 @@ else
     log "Stage 5b: ${EXCEPTIONS_FILE} not found — no exception routes loaded (D-05)"
 fi
 
+# ─── Stage 5c: VPN force-overrides (vpn-force.txt) ──────────────────────────
+# CIDRs in this file are forced through VPN even if Stage 5 assigned them to ISP.
+# Use case: Google GGC nodes physically in Russia appear in the RU subnet list,
+# but the ISP blocks their content (YouTube). `ip route replace` overwrites the
+# Keenetic route that Stage 5 added, redirecting those prefixes to awg0.
+# Absence of the file is normal — skip silently (same pattern as Stage 5b).
+VPN_FORCED=0
+if [[ -f "${VPN_FORCE_FILE}" ]]; then
+    log "Stage 5c: Loading VPN force-override CIDRs from ${VPN_FORCE_FILE}..."
+    while IFS= read -r subnet; do
+        [[ -z "${subnet}" ]] && continue
+        [[ "${subnet}" =~ ^[[:space:]]*# ]] && continue
+        ip route replace "${subnet}" dev "${VPN_IFACE}" 2>/dev/null || true
+        (( VPN_FORCED++ )) || true
+    done < "${VPN_FORCE_FILE}"
+    log "VPN force-overrides applied: ${VPN_FORCED} routes via ${VPN_IFACE} (overriding RU list)"
+else
+    log "Stage 5c: ${VPN_FORCE_FILE} not found — no VPN force-overrides loaded"
+fi
+
 # ─── Stage 6: Set default route via VPN (ROUT-04, D-09) ─────────────────────
 # All non-RU traffic exits through the VPN tunnel.
 # Added AFTER host route (Stage 4) and RU routes (Stage 5) so that more-specific
@@ -313,6 +334,7 @@ log "  VPN interface:   ${VPN_IFACE}"
 log "  VPN server:      ${VPN_SERVER_IP}/32 via ${KEENETIC_GW} (loop prevention)"
 log "  RU subnets:      ${ADDED} routes via ${KEENETIC_GW}"
 log "  Exceptions:      ${EX_ADDED} routes via ${KEENETIC_GW} (from ${EXCEPTIONS_FILE})"
+log "  VPN overrides:   ${VPN_FORCED} routes via ${VPN_IFACE} (from ${VPN_FORCE_FILE})"
 log "  Default:         dev ${VPN_IFACE} (all other traffic → VPN)"
 log "  iptables rules:  ${IPTABLES_RULES}"
 log "  iptables LOG:    [VPN] on ${VPN_IFACE}, [ISP] on eth0 (NEW only, 10/min limit)"

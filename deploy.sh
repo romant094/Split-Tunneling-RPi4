@@ -59,11 +59,14 @@ WATCH_ROUTES_TMP="/tmp/watch-routes.py.tmp"
 WHITE_LIST_EXT_LOCAL="configs/white-list-extended.txt"
 WHITE_LIST_EXT_REMOTE="/etc/white-list-extended.txt"
 WHITE_LIST_EXT_TMP="/tmp/white-list-extended.tmp"
+VPN_FORCE_LOCAL="configs/vpn-force.txt"
+VPN_FORCE_REMOTE="/etc/vpn-force.txt"
+VPN_FORCE_TMP="/tmp/vpn-force.tmp"
 NM_DISPATCHER_LOCAL="scripts/10-vpn-routes"
 NM_DISPATCHER_REMOTE="/etc/NetworkManager/dispatcher.d/10-vpn-routes"
 NM_DISPATCHER_TMP="/tmp/10-vpn-routes.tmp"
 
-TOTAL_STAGES=23
+TOTAL_STAGES=24
 
 # ─── Argument Parsing (D-12) ─────────────────────────────────────────────────
 RUN_ROUTING=true
@@ -361,15 +364,25 @@ else
     echo "       ${WHITE_LIST_EXT_LOCAL} not found in repo — skipping exception file deploy (D-05)."
 fi
 
-# ─── Stage 22: Deploy NM dispatcher for carrier-change route recovery ────────
-echo "[22/${TOTAL_STAGES}] Deploying NM dispatcher ${NM_DISPATCHER_LOCAL} to ${SSH_HOST}:${NM_DISPATCHER_REMOTE}..."
+# ─── Stage 22: Deploy vpn-force.txt to RPi (Google GGC VPN override) ────────
+echo "[22/${TOTAL_STAGES}] Deploying vpn-force.txt to ${SSH_HOST} (if present)..."
+if [[ -f "${VPN_FORCE_LOCAL}" ]]; then
+    scp -o BatchMode=yes "${VPN_FORCE_LOCAL}" "${SSH_HOST}:${VPN_FORCE_TMP}"
+    ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${VPN_FORCE_TMP} ${VPN_FORCE_REMOTE} && sudo chmod 644 ${VPN_FORCE_REMOTE} && sudo chown root:root ${VPN_FORCE_REMOTE}"
+    echo "       vpn-force.txt deployed (mode 644, root:root) — Google GGC ranges forced through VPN."
+else
+    echo "       ${VPN_FORCE_LOCAL} not found in repo — skipping VPN force-override deploy."
+fi
+
+# ─── Stage 23: Deploy NM dispatcher for carrier-change route recovery ────────
+echo "[23/${TOTAL_STAGES}] Deploying NM dispatcher ${NM_DISPATCHER_LOCAL} to ${SSH_HOST}:${NM_DISPATCHER_REMOTE}..."
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo mkdir -p /etc/NetworkManager/dispatcher.d"
 scp -o BatchMode=yes "${NM_DISPATCHER_LOCAL}" "${SSH_HOST}:${NM_DISPATCHER_TMP}"
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${NM_DISPATCHER_TMP} ${NM_DISPATCHER_REMOTE} && sudo chmod 755 ${NM_DISPATCHER_REMOTE} && sudo chown root:root ${NM_DISPATCHER_REMOTE}"
 echo "       10-vpn-routes deployed (chmod 755, root:root) — restores routes on eth0 up events."
 
-# ─── Stage 23: Activate Phase 5 routes via routing.sh (D-18, D-04, D-06/P5) ──
-echo "[23/${TOTAL_STAGES}] Activating routes via routing.sh on ${SSH_HOST}..."
+# ─── Stage 24: Activate Phase 5 routes via routing.sh (D-18, D-04, D-06/P5) ──
+echo "[24/${TOTAL_STAGES}] Activating routes via routing.sh on ${SSH_HOST}..."
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo ${ROUTING_SH_REMOTE}"
 echo "       routing.sh re-run complete — [VPN] and [ISP] LOG rules active; exception routes loaded if present."
 
@@ -395,6 +408,7 @@ echo "   PHASE 4: ${VPN_STATUS_REMOTE} (chmod +x, root:root)"
 echo "   PHASE 4: ${WATCH_ROUTES_REMOTE} (chmod +x, root:root)"
 echo "   PHASE 4: iptables LOG rules [VPN] + [ISP] active (via routing.sh)"
 echo "   PHASE 5: ${WHITE_LIST_EXT_REMOTE} (mode 644, root:root, optional — deployed only if ${WHITE_LIST_EXT_LOCAL} exists)
+   PHASE 5: ${VPN_FORCE_REMOTE} (mode 644, root:root, optional — Google GGC VPN overrides)
    PHASE 6: ${NM_DISPATCHER_REMOTE} (chmod 755, root:root — restores routes on eth0 up)"
 echo ""
 echo " Next steps (run manually — tunnel bring-up is intentionally NOT automated):"
