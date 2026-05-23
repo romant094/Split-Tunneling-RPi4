@@ -134,6 +134,16 @@ iptables -C FORWARD -o "${VPN_IFACE}" -m state --state NEW -m limit --limit 10/m
     iptables -D FORWARD -o "${VPN_IFACE}" -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[VPN] " --log-level 6 || true
 iptables -C FORWARD -o eth0 -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[ISP] " --log-level 6 2>/dev/null && \
     iptables -D FORWARD -o eth0 -m state --state NEW -m limit --limit 10/min --limit-burst 20 -j LOG --log-prefix "[ISP] " --log-level 6 || true
+log "Stage 3: Flushing VPN force-override ip rules (if present)..."
+# Remove priority-100 ip rules added by Stage 5c on previous runs.
+# ip rule del is idempotent via || true; iterates vpn-force.txt if present.
+if [[ -f "${VPN_FORCE_FILE}" ]]; then
+    while IFS= read -r subnet; do
+        [[ -z "${subnet}" ]] && continue
+        [[ "${subnet}" =~ ^[[:space:]]*# ]] && continue
+        ip rule del to "${subnet}" table 51820 priority 100 2>/dev/null || true
+    done < "${VPN_FORCE_FILE}"
+fi
 log "Stage 3: Flushing existing VPN routes (D-06)..."
 ip route flush dev "${VPN_IFACE}" 2>/dev/null || true
 ip route del "${VPN_SERVER_IP}/32" 2>/dev/null || true
@@ -184,21 +194,24 @@ else
 fi
 
 # ─── Stage 5c: VPN force-overrides (vpn-force.txt) ──────────────────────────
-# CIDRs in this file are forced through VPN even if Stage 5 assigned them to ISP.
-# Use case: Google GGC nodes physically in Russia appear in the RU subnet list,
-# but the ISP blocks their content (YouTube). `ip route replace` overwrites the
-# Keenetic route that Stage 5 added, redirecting those prefixes to awg0.
+# CIDRs in this file bypass the main routing table entirely via high-priority
+# ip rules (priority 100). This is necessary because the RU subnet list may
+# contain more-specific prefixes (e.g. /24) that would win over a broader
+# /15 route added to the main table via `ip route`. `ip rule` fires before
+# the main table lookup, so more-specific RU routes are never consulted.
+# Use case: Google GGC nodes (142.250.0.0/15 etc.) are in the RU list but
+# their content is blocked by ISP — force them through VPN.
 # Absence of the file is normal — skip silently (same pattern as Stage 5b).
 VPN_FORCED=0
 if [[ -f "${VPN_FORCE_FILE}" ]]; then
-    log "Stage 5c: Loading VPN force-override CIDRs from ${VPN_FORCE_FILE}..."
+    log "Stage 5c: Adding high-priority ip rules for VPN force-overrides from ${VPN_FORCE_FILE}..."
     while IFS= read -r subnet; do
         [[ -z "${subnet}" ]] && continue
         [[ "${subnet}" =~ ^[[:space:]]*# ]] && continue
-        ip route replace "${subnet}" dev "${VPN_IFACE}" 2>/dev/null || true
+        ip rule add to "${subnet}" table 51820 priority 100 2>/dev/null || true
         (( VPN_FORCED++ )) || true
     done < "${VPN_FORCE_FILE}"
-    log "VPN force-overrides applied: ${VPN_FORCED} routes via ${VPN_IFACE} (overriding RU list)"
+    log "VPN force-overrides applied: ${VPN_FORCED} ip rules priority 100 → table 51820"
 else
     log "Stage 5c: ${VPN_FORCE_FILE} not found — no VPN force-overrides loaded"
 fi
