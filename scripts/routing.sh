@@ -118,7 +118,10 @@ log "Subnet file valid: ${WHITE_LIST_COUNT} lines in ${WHITE_LIST_FILE}"
 # ip route flush dev <iface> removes ALL routes using awg0 (including default via awg0).
 # The VPN server host route lives in the main table via ISP (not via awg0), so we
 # delete it separately.
-log "Stage 3: Flushing FORWARD ACCEPT, LOG, and NAT rules (if present)..."
+log "Stage 3: Flushing FORWARD ACCEPT, LOG, NAT, and mangle rules (if present)..."
+# Remove MSS clamp rule (mangle table) — rebuilt in Stage 7d
+iptables -t mangle -C FORWARD -o "${VPN_IFACE}" -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null && \
+    iptables -t mangle -D FORWARD -o "${VPN_IFACE}" -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu || true
 # Remove old eth0 MASQUERADE without LAN exclusion (superseded by ! -d LAN variant)
 iptables -t nat -C POSTROUTING -o eth0 -j MASQUERADE 2>/dev/null && \
     iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE || true
@@ -253,6 +256,21 @@ if iptables -C FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/nul
 else
     iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
     log "FORWARD ACCEPT RELATED,ESTABLISHED: added"
+fi
+
+# ─── Stage 7d: MSS clamping for TCP through VPN (MTU fix) ───────────────────
+# LAN devices negotiate TCP MSS=1460 (eth0 MTU 1500 − 40). awg0 MTU is 1420, so
+# 1500-byte packets from LAN can't pass through the tunnel — silently dropped.
+# TCPMSS --clamp-mss-to-pmtu rewrites the MSS in SYN packets to match awg0 PMTU
+# (1420 − 40 = 1380), preventing PMTUD black-hole for HTTPS/streaming traffic.
+# D-07 pattern: check before add.
+log "Stage 7d: Configuring MSS clamp for TCP through ${VPN_IFACE}..."
+
+if iptables -t mangle -C FORWARD -o "${VPN_IFACE}" -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null; then
+    log "MSS clamp on ${VPN_IFACE}: already present (no change)"
+else
+    iptables -t mangle -A FORWARD -o "${VPN_IFACE}" -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+    log "MSS clamp on ${VPN_IFACE}: added"
 fi
 
 # ─── Stage 8: iptables-persistent (NAT-03) ────────────────────────────────────
