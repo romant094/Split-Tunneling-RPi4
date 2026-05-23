@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase 06 planned
+status: Phase 6 complete
 stopped_at: Phase 6 planned — 2 plans in 2 waves
-last_updated: "2026-05-22T11:07:44.881Z"
+last_updated: "2026-05-23T05:13:44.897Z"
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 14
-  completed_plans: 12
-  percent: 71
+  completed_plans: 14
+  percent: 86
 ---
 
 # State: RPi VPN Gateway
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Non-RU traffic exits through AmneziaWG VPN; RU traffic exits direct via ISP — transparent to LAN devices, survives reboots, fully reversible.
-**Current focus:** Phase 06 — Documentation
+**Current focus:** Phase 6 — documentation
 
 ## Current Phase
 
