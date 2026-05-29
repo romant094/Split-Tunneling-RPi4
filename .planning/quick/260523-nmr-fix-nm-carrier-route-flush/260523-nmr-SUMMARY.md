@@ -52,10 +52,10 @@ NetworkManager performs a full interface reconfiguration on carrier-change event
 (link down → link up). This flushes all routes associated with eth0, including
 routes added by `routing.sh` outside of NM's management:
 
-- `84.32.100.60/32 via 192.168.1.1` (VPN server host route — loop prevention)
+- `YOUR_VPN_SERVER_IP/32 via 192.168.1.1` (VPN server host route — loop prevention)
 - 1359 × `x.x.x.x/xx via 192.168.1.1` (Russian subnet routes)
 
-Without the VPN server host route, `ip route get 84.32.100.60` resolves via
+Without the VPN server host route, `ip route get YOUR_VPN_SERVER_IP` resolves via
 AmneziaWG's policy table 51820 (`default dev awg0`) — creating a routing loop
 that prevents VPN reconnection. No VPN → no internet → cron download failure
 → no self-heal.
@@ -104,7 +104,7 @@ Routes after disconnect:
 2                          ← all eth0 routes flushed by NM
 === AFTER reconnect
 1363                       ← dispatcher restored all routes
-84.32.100.60 via 192.168.1.1 dev eth0  ← loop-prevention route back
+YOUR_VPN_SERVER_IP via 192.168.1.1 dev eth0  ← loop-prevention route back
 ```
 
 Syslog confirmation:

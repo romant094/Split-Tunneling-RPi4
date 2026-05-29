@@ -28,7 +28,7 @@ RPi4 (IP уточнить у пользователя)
 | Переменная | Значение |
 |---|---|
 | `KEENETIC_GW` | `192.168.1.1` |
-| `VPN_SERVER_IP` | `84.32.100.60` |
+| `VPN_SERVER_IP` | `YOUR_VPN_SERVER_IP` |
 | `VPN_IFACE` | `awg0` |
 | `RPI_LAN_IP` | уточнить у пользователя |
 | `LAN_SUBNET` | `192.168.1.0/24` (уточнить) |
@@ -86,7 +86,7 @@ sudo sysctl -p
 
 4. **Добавить маршрут до VPN-сервера через провайдера** (критично — иначе петля):
    ```bash
-   ip route add 84.32.100.60/32 via 192.168.1.1
+   ip route add YOUR_VPN_SERVER_IP/32 via 192.168.1.1
    ```
 
 5. **Добавить маршруты для RU-подсетей через провайдера:**
@@ -236,7 +236,7 @@ Remember to update DHCP gateway on Keenetic back to 192.168.1.1.
 ip route show default
 
 # 2. Маршрут до VPN-сервера — должен идти через 192.168.1.1
-ip route get 84.32.100.60
+ip route get YOUR_VPN_SERVER_IP
 
 # 3. Маршрут до RU-ресурса (например Яндекс) — должен идти через eth0/192.168.1.1
 ip route get 77.88.8.8

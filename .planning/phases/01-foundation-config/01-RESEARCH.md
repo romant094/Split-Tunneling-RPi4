@@ -143,7 +143,7 @@ RPi 4 (pi4, 192.168.1.254)
          │
          ▼
 awg0 interface (10.8.1.13/32)
-  └── Tunnel to VPN server (84.32.100.60:36348)
+  └── Tunnel to VPN server (YOUR_VPN_SERVER_IP:36348)
 ```
 
 ### Recommended Project Structure

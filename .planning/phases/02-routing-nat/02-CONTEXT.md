@@ -10,7 +10,7 @@ Create `scripts/routing.sh` (deployed to `/etc/routing.sh` on RPi) that:
 1. Downloads the RU subnet list and saves it to `/etc/vpn-ru-subnets.txt`
 2. Flushes and rebuilds all VPN-related routes in the main routing table
 3. Sets default route via awg0 (all traffic → VPN)
-4. Adds host route for VPN server (84.32.100.60) via ISP (prevents tunnel loop)
+4. Adds host route for VPN server (YOUR_VPN_SERVER_IP) via ISP (prevents tunnel loop)
 5. Adds RU subnet routes via ISP (Keenetic gw)
 6. Configures iptables MASQUERADE on awg0 and eth0
 7. Installs iptables-persistent so rules survive reboot

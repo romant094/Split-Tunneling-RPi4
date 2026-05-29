@@ -27,7 +27,7 @@
 #
 # Variables sourced from /etc/vpn-gateway.env (deployed by Phase 1):
 #   KEENETIC_GW      — ISP gateway (Keenetic router LAN IP, e.g. 192.168.1.1)
-#   VPN_SERVER_IP    — AmneziaWG server IP (e.g. 84.32.100.60)
+#   VPN_SERVER_IP    — AmneziaWG server IP (e.g. YOUR_VPN_SERVER_IP)
 #   VPN_IFACE        — VPN tunnel interface (e.g. awg0)
 #   LAN_SUBNET       — Local LAN subnet (e.g. 192.168.1.0/24)
 #   RU_SUBNET_URL    — URL for RU CIDR list (https://russia.iplist.opencck.org/?format=text&data=cidr4)

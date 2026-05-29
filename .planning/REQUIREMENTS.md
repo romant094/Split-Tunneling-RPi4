@@ -19,7 +19,7 @@
 
 - [x] **ROUT-01**: `/etc/routing.sh` downloads RU subnet list and applies split routes
 - [x] **ROUT-02**: routing.sh is idempotent (safe to re-run without errors)
-- [x] **ROUT-03**: routing.sh adds host route for VPN server (84.32.100.60) via ISP (prevents tunnel loop)
+- [x] **ROUT-03**: routing.sh adds host route for VPN server (YOUR_VPN_SERVER_IP) via ISP (prevents tunnel loop)
 - [x] **ROUT-04**: routing.sh sets default route via awg0
 
 ### NAT
@@ -43,7 +43,7 @@
 
 - [ ] **VRFY-01**: `ip route get 8.8.8.8` → dev awg0 (foreign traffic via VPN)
 - [ ] **VRFY-02**: `ip route get 77.88.8.8` → via 192.168.1.1 (RU traffic via ISP)
-- [ ] **VRFY-03**: `ip route get 84.32.100.60` → via 192.168.1.1 (VPN server via ISP)
+- [ ] **VRFY-03**: `ip route get YOUR_VPN_SERVER_IP` → via 192.168.1.1 (VPN server via ISP)
 - [ ] **VRFY-04**: `curl --interface awg0 https://ifconfig.me` returns VPN server IP
 
 ## v2 Requirements

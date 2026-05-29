@@ -36,7 +36,7 @@ Non-RU traffic exits through AmneziaWG VPN; RU traffic exits direct via ISP — 
 
 - Network: Keenetic router at 192.168.1.1 (PPPoE → Small Telecom ISP), LAN subnet 192.168.1.0/24
 - RPi static IP: 192.168.1.254
-- VPN server: 84.32.100.60:36348 (AmneziaWG)
+- VPN server: YOUR_VPN_SERVER_IP:36348 (AmneziaWG)
 - VPN client IP: 10.8.1.13/32
 - AmneziaWG config template: `amnezia.key.claude.txt` (keys redacted for repo safety; user provides real keys at deploy time)
 - All config variables live in `.env` (committed, no secrets) and deployed to `/etc/vpn-gateway.env` on RPi

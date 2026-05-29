@@ -15,7 +15,7 @@ the RPi, which splits it into two paths:
 - **Russian IP ranges** (downloaded daily from `russia.iplist.opencck.org`) exit direct via the
   ISP gateway (router at `192.168.1.1`).
 - **Custom exceptions** (`/etc/white-list-extended.txt`) can force additional CIDRs via ISP.
-- **VPN server host route** (`84.32.100.60/32`) is always kept via ISP to prevent a routing loop.
+- **VPN server host route** (`YOUR_VPN_SERVER_IP/32`) is always kept via ISP to prevent a routing loop.
 
 LAN devices are configured to use the RPi as their gateway via a router DHCP option. They
 require no individual configuration — the split is fully transparent.
@@ -30,7 +30,7 @@ RPi4 (192.168.1.254) — VPN gateway
 LAN devices (default gateway = 192.168.1.254 via router DHCP)
 
 Traffic routing:
-  Non-RU → awg0 → AmneziaWG VPN (endpoint: 84.32.100.60:36348)
+  Non-RU → awg0 → AmneziaWG VPN (endpoint: YOUR_VPN_SERVER_IP:36348)
   RU CIDRs + exceptions → eth0 → ISP direct (via 192.168.1.1)
 ```
 
@@ -40,7 +40,7 @@ Key environment variables (from `/etc/vpn-gateway.env` on the RPi, sourced from 
 |----------|-------|-------------|
 | `RPI_LAN_IP` | `192.168.1.254` | RPi LAN IP address |
 | `KEENETIC_GW` | `192.168.1.1` | ISP gateway (your router) |
-| `VPN_SERVER_IP` | `84.32.100.60` | AmneziaWG server endpoint IP |
+| `VPN_SERVER_IP` | `YOUR_VPN_SERVER_IP` | AmneziaWG server endpoint IP |
 | `VPN_IFACE` | `awg0` | VPN tunnel interface name |
 | `LAN_SUBNET` | `192.168.1.0/24` | Local LAN subnet |
 | `RU_SUBNET_URL` | `https://russia.iplist.opencck.org/?format=text&data=cidr4` | RU CIDR list source |
@@ -198,7 +198,7 @@ ssh pi4 "ip route get 77.88.8.8"
 # Expected output contains: via 192.168.1.1
 
 # 4. VPN server IP must route via ISP (loop prevention)
-ssh pi4 "ip route get 84.32.100.60"
+ssh pi4 "ip route get YOUR_VPN_SERVER_IP"
 # Expected output contains: via 192.168.1.1
 ```
 
@@ -707,7 +707,7 @@ Fix: Set your router DNS server to `192.168.1.254` (see Prerequisites → Router
 
 Symptom: VPN routing breaks after the router reboots or the eth0 link goes down and comes back up. `ssh pi4 "ip route show | wc -l"` drops to approximately 2 (only local routes). `ip route get 8.8.8.8` no longer shows `dev awg0`.
 
-Cause: When the router reboots, the eth0 link drops (carrier-change event). NetworkManager (NM) flushes all eth0 routes on the link-down event — including the ~1360 RU CIDR routes and the VPN server host route added by `routing.sh`. When eth0 comes back up, only the local link route is restored by NM. Without the VPN server host route (`84.32.100.60/32 via 192.168.1.1`), `ip route get 84.32.100.60` resolves via `awg0` (policy table 51820), creating a routing loop. No VPN connection → no internet → the daily cron download also fails → the system cannot self-heal without intervention.
+Cause: When the router reboots, the eth0 link drops (carrier-change event). NetworkManager (NM) flushes all eth0 routes on the link-down event — including the ~1360 RU CIDR routes and the VPN server host route added by `routing.sh`. When eth0 comes back up, only the local link route is restored by NM. Without the VPN server host route (`YOUR_VPN_SERVER_IP/32 via 192.168.1.1`), `ip route get YOUR_VPN_SERVER_IP` resolves via `awg0` (policy table 51820), creating a routing loop. No VPN connection → no internet → the daily cron download also fails → the system cannot self-heal without intervention.
 
 Fix: `deploy.sh` Stage 22 deploys `/etc/NetworkManager/dispatcher.d/10-vpn-routes` — an NM dispatcher script that automatically restores routes by running `routing.sh --no-update` in the background when `eth0 up` is detected.
 

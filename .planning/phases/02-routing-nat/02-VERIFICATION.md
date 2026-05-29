@@ -99,7 +99,7 @@ Run after `./deploy.sh` against pi4:
 ```bash
 # Phase 2 success criteria (from ROADMAP.md)
 ip route show default                    # expect: default dev awg0
-ip route get 84.32.100.60               # expect: via 192.168.1.1 (VPN server → ISP)
+ip route get YOUR_VPN_SERVER_IP               # expect: via 192.168.1.1 (VPN server → ISP)
 ip route get 77.88.8.8                  # expect: via 192.168.1.1 (RU → ISP)
 ip route get 8.8.8.8                    # expect: dev awg0 (foreign → VPN)
 sudo iptables -t nat -L POSTROUTING -nv # expect: MASQUERADE on awg0 + eth0

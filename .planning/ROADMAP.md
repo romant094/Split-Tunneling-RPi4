@@ -83,7 +83,7 @@
 **Success Criteria:**
 
 1. `ip route show default` shows dev awg0
-2. `ip route get 84.32.100.60` → via 192.168.1.1 (not awg0)
+2. `ip route get YOUR_VPN_SERVER_IP` → via 192.168.1.1 (not awg0)
 3. `ip route get 77.88.8.8` → via 192.168.1.1 (RU → ISP)
 4. `ip route get 8.8.8.8` → dev awg0 (foreign → VPN)
 5. LAN device reaches internet through RPi (both VPN and direct paths)
@@ -105,7 +105,7 @@
 - ROLL-02: Rollback preserves awg0.conf, installed packages, routing.sh
 - VRFY-01: ip route get 8.8.8.8 → awg0
 - VRFY-02: ip route get 77.88.8.8 → 192.168.1.1
-- VRFY-03: ip route get 84.32.100.60 → 192.168.1.1
+- VRFY-03: ip route get YOUR_VPN_SERVER_IP → 192.168.1.1
 - VRFY-04: curl --interface awg0 https://ifconfig.me returns VPN IP
 
 **Deliverables:**
