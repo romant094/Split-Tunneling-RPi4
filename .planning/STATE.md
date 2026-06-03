@@ -125,6 +125,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260521-jex | Add scripts/watch-routes.py — real-time iptables log viewer with reverse DNS caching | 2026-05-21 | cf6bafa | [260521-jex-add-scripts-watch-routes-py-real-time-ip](./quick/260521-jex-add-scripts-watch-routes-py-real-time-ip/) |
+| 260603-f8c | Add src/deploy-routes.sh fast custom-routes deploy (SCP isp/vpn-routes-custom.txt + routing.sh --no-update) | 2026-06-03 | 0d0bec6 | [260603-f8c-add-deploy-routes-npm-script-create-src-](./quick/260603-f8c-add-deploy-routes-npm-script-create-src-/) |
 
 ## Accumulated Context
 

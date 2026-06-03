@@ -229,6 +229,14 @@ Note: `src/configs/isp-routes-custom.txt` is gitignored — never committed.
 
 **Step 4: Deploy**
 
+For routine CIDR edits use the fast path (SCPs only custom-route files, skips full pipeline):
+
+```bash
+bash src/deploy-routes.sh
+```
+
+For a first-time deploy or when other files have changed:
+
 ```bash
 bash src/deploy.sh
 ```
@@ -283,6 +291,14 @@ Edit and add CIDRs (one per line, whole-line comments only, no inline comments):
 Note: `src/configs/vpn-routes-custom.txt` is gitignored — never committed.
 
 **Step 4: Deploy**
+
+For routine CIDR edits use the fast path (SCPs only custom-route files, skips full pipeline):
+
+```bash
+bash src/deploy-routes.sh
+```
+
+For a first-time deploy or when other files have changed:
 
 ```bash
 bash src/deploy.sh
@@ -459,6 +475,35 @@ Sources `.env` and `.env.secrets`; validates keys before any remote operation.
 bash src/deploy.sh              # full deploy + activate routing
 bash src/deploy.sh --no-run     # deploy only — activate routing manually later
 ssh pi4 "sudo /etc/splitgate/routing.sh"   # activate after --no-run deploy
+```
+
+---
+
+### src/deploy-routes.sh
+
+**Synopsis:** `bash src/deploy-routes.sh`
+
+Fast custom-routes-only deploy. Runs from your Mac. 3 stages: SSH preflight, conditional SCP of each custom-route file, then `routing.sh --no-update` on the RPi.
+
+**When to use:** After editing `src/configs/isp-routes-custom.txt` or `src/configs/vpn-routes-custom.txt` for routine CIDR changes. Skips AmneziaWG install, key validation, and systemd setup — takes seconds instead of the full 28-stage deploy.
+
+**When to use `src/deploy.sh` instead:** First-time deploy, AmneziaWG reinstall, systemd changes, or any change outside the two custom-route files.
+
+| Stage | What happens |
+|-------|--------------|
+| 1/3 | SSH connectivity check (`-o ConnectTimeout=5 -o BatchMode=yes`) |
+| 2/3 | If `isp-routes-custom.txt` exists: SCP to `/tmp`, `sudo mv` to `/etc/splitgate/isp-routes-custom.txt` (mode 644, root:root) |
+| 2b/3 | If `vpn-routes-custom.txt` exists: SCP to `/tmp`, `sudo mv` to `/etc/splitgate/vpn-routes-custom.txt` (mode 644, root:root) |
+| 3/3 | `ssh … sudo /etc/splitgate/routing.sh --no-update` |
+
+Exit codes: `1` if SSH connectivity fails, `1` if neither custom-route file exists locally, `0` on success.
+
+```bash
+bash src/deploy-routes.sh
+
+# Verify after deploy:
+ssh pi4 "ls -l /etc/splitgate/{isp,vpn}-routes-custom.txt"
+ssh pi4 "ip route get <your-exception-ip>"
 ```
 
 ---
@@ -791,3 +836,4 @@ ssh pi4 "sudo /etc/splitgate/routing.sh"
 |----|-------------|--------|
 | 260521-jex | Add `scripts/watch-routes.py` — real-time iptables log enricher with rDNS caching | cf6bafa |
 | 260523-nmr | Fix NM carrier-change route flush — add NM dispatcher (`10-vpn-routes`) + fallback rebuild in `update-vpn-routes` | 847ff31 |
+| 260603-f8c | Add `src/deploy-routes.sh` — fast custom-routes-only deploy (SCP isp/vpn-routes-custom.txt + routing.sh --no-update) | 0d0bec6 |
