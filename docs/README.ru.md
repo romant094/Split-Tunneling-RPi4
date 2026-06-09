@@ -77,6 +77,8 @@ cp src/configs/isp-routes-custom.txt.example src/configs/isp-routes-custom.txt
 cp src/configs/vpn-routes-custom.txt.example src/configs/vpn-routes-custom.txt
 ```
 
+После правки любого из этих файлов используйте `bash src/deploy-routes.sh` вместо полного `bash src/deploy.sh`. Скрипт копирует только два файла кастомных маршрутов и запускает `routing.sh --no-update` — без установки AmneziaWG, валидации ключей и настройки systemd. Занимает секунды вместо минут.
+
 **Опционально — исключения из списка RU-адресов** (`src/configs/ru-list-exclude.txt`): IP-диапазоны, которые нужно убрать из загружаемого списка RU на стороне сервера (используется, когда список RU ошибочно включает диапазон, который должен туннелироваться). Создайте из примера при необходимости:
 
 ```bash
@@ -104,6 +106,7 @@ cp src/configs/ru-list-exclude.txt.example src/configs/ru-list-exclude.txt
 ```bash
 bash src/deploy.sh            # развернуть всё + активировать маршрутизацию
 bash src/deploy.sh --no-run   # только развернуть файлы (используйте до поднятия туннеля)
+bash src/deploy-routes.sh     # быстрая выгрузка только файлов кастомных маршрутов (после правки isp-routes-custom.txt или vpn-routes-custom.txt)
 ```
 
 ### 5. Поднимите туннель

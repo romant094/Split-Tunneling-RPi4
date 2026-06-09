@@ -77,6 +77,8 @@ cp src/configs/isp-routes-custom.txt.example src/configs/isp-routes-custom.txt
 cp src/configs/vpn-routes-custom.txt.example src/configs/vpn-routes-custom.txt
 ```
 
+After editing either custom-route file, use `bash src/deploy-routes.sh` instead of a full `bash src/deploy.sh`. It SCPs only the two custom-route files and runs `routing.sh --no-update` — skipping AmneziaWG install, key validation, and systemd setup. Takes seconds instead of minutes.
+
 **Optional — RU list exclusions** (`src/configs/ru-list-exclude.txt`): CIDRs to strip from the downloaded RU list server-side (use when the RU list incorrectly includes a range you want tunneled). Create from example when needed:
 
 ```bash
@@ -104,6 +106,7 @@ All three files are gitignored. Full workflow: [docs/REFERENCE.md](docs/REFERENC
 ```bash
 bash src/deploy.sh            # deploy all files + activate routing
 bash src/deploy.sh --no-run   # deploy files only (use before tunnel is up)
+bash src/deploy-routes.sh     # fast push of custom-route files only (after editing isp-routes-custom.txt or vpn-routes-custom.txt)
 ```
 
 ### 5. Bring up the tunnel
