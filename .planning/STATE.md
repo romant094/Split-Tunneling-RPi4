@@ -112,8 +112,8 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 
 ## Last Session
 
-**Stopped at:** Phase 13 complete — all 4 plans done; 11 RU CIDRs added; log renames complete; daemon + systemd deployed; docs updated
-**Timestamp:** 2026-05-29T00:00:00Z
+**Stopped at:** Quick task 260603-f8c complete — deploy-routes.sh added; docs updated
+**Timestamp:** 2026-06-03T00:00:00Z
 **Resume:** Deploy to RPi: `cd src && ./deploy.sh`
 
 ---
@@ -125,7 +125,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260521-jex | Add scripts/watch-routes.py — real-time iptables log viewer with reverse DNS caching | 2026-05-21 | cf6bafa | [260521-jex-add-scripts-watch-routes-py-real-time-ip](./quick/260521-jex-add-scripts-watch-routes-py-real-time-ip/) |
-| 260603-f8c | Add src/deploy-routes.sh fast custom-routes deploy (SCP isp/vpn-routes-custom.txt + routing.sh --no-update) | 2026-06-03 | 0d0bec6 | [260603-f8c-add-deploy-routes-npm-script-create-src-](./quick/260603-f8c-add-deploy-routes-npm-script-create-src-/) |
+| 260603-f8c | Add deploy-routes.sh — fast custom-routes deploy (SCP + routing.sh --no-update) | 2026-06-03 | 0d0bec6 | [260603-f8c-add-deploy-routes-npm-script-create-src-](./quick/260603-f8c-add-deploy-routes-npm-script-create-src-/) |
 
 ## Accumulated Context
 
