@@ -137,6 +137,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 - Phase 7 added: ASN Enrichment & Traffic Attribution
 - Phase 9 added: Operational Logging — centralized logs for diagnosing system failures; 14-day rotation
 - Phase 10 added: Splitgate Ergonomics & Organization — consolidate RPi files under /etc/splitgate/, add splitgate dispatcher CLI, move repo source into src/ subdirectory; 4 plans across 3 waves (Wave 0: src/ restructure; Wave 1: path migration + deploy.sh parallel; Wave 2: dispatcher + docs)
+- Phase 14 added: domain-based routing via dnsmasq ipset — allow domain suffixes (e.g. amazonaws.com, cloudfront.net) in isp-routes-custom.txt and vpn-routes-custom.txt alongside CIDRs; real-time DNS-triggered routing via kernel ipsets + iptables mangle marks + policy routing tables
 
 ### Phase 4 Post-execution Fixes (applied after plans, discovered during live testing)
 

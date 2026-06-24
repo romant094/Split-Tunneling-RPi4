@@ -347,6 +347,16 @@ Plans:
 
 **Phase 13 complete ✓**
 
+### Phase 14: domain-based routing via dnsmasq ipset
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 13
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 14 to break down)
+
 ---
 *Created: 2026-05-18*
 *Updated: 2026-05-29 — Phase 13 planned: 4 plans across 3 waves*
