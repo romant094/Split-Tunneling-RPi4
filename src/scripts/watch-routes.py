@@ -37,6 +37,18 @@ import sys
 import threading
 import time
 
+# ─── ANSI colors (interactive stdout only) ────────────────────────────────────
+_C_VPN   = "\033[36m"   # cyan  — VPN traffic
+_C_ISP   = "\033[33m"   # yellow — ISP (direct) traffic
+_C_RESET = "\033[0m"
+
+def _tag(tag: str) -> str:
+    """Return colored [TAG] when stdout is a TTY, plain otherwise."""
+    if not sys.stdout.isatty():
+        return f"[{tag}]"
+    color = _C_VPN if tag == "VPN" else _C_ISP
+    return f"{color}[{tag}]{_C_RESET}"
+
 # ─── DNS cache ────────────────────────────────────────────────────────────────
 # Maps IP string → hostname string.
 # Failed lookups are stored as the IP itself so we never retry the same address.
@@ -208,10 +220,11 @@ def _flush_entries(entries: list, asn_result: dict) -> None:
         hostname = resolve(dst, no_dns)
         dst_part = f"{dst} ({hostname[:40]})" if hostname != dst else dst
         port_part = f"{proto}:{dpt}" if dpt else proto
+        tag_str = f"[{tag}]" if _DAEMON_MODE else _tag(tag)
         if _DAEMON_MODE and status:
-            line = f"{ts} [{tag}] {status} {src} → {dst_part} {port_part}"
+            line = f"{ts} {tag_str} {status} {src} → {dst_part} {port_part}"
         else:
-            line = f"{ts} [{tag}] {src} → {dst_part} {port_part}"
+            line = f"{ts} {tag_str} {src} → {dst_part} {port_part}"
         if org:
             line += f" | {org}"
         if _DAEMON_MODE:
@@ -311,14 +324,15 @@ def format_line(ts: str, tag: str, src: str, dst: str, proto: str, dpt: str, no_
 
     port_part = f"{proto}:{dpt}" if dpt else proto
 
+    tag_str = _tag(tag)
     if enable_asn:
         with _asn_lock:
             cached = _asn_cache.get(dst, "__missing__")
         if cached == "__missing__":
             lookup_async(dst)
         elif isinstance(cached, dict) and cached.get("org"):
-            return f"{ts} [{tag}] {src} → {dst_part} {port_part} | {cached['org']}"
-    return f"{ts} [{tag}] {src} → {dst_part} {port_part}"
+            return f"{ts} {tag_str} {src} → {dst_part} {port_part} | {cached['org']}"
+    return f"{ts} {tag_str} {src} → {dst_part} {port_part}"
 
 
 def parse_args() -> argparse.Namespace:
