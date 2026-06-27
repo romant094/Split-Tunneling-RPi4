@@ -1,7 +1,7 @@
 # Roadmap: RPi VPN Gateway
 
 **Created:** 2026-05-18
-**Phases:** 13
+**Phases:** 15
 **Requirements mapped:** 20/20 ✓
 
 ---
@@ -363,18 +363,32 @@ Plans:
 
 **Goal:** Lightweight web UI running on the RPi that lets any LAN device manage the gateway without SSH — add/remove VPN or ISP route exceptions, view live traffic logs, reload routing rules, check system status (VPN tunnel up/down, daemon status, last RU list update).
 **Requirements**:
-- Route management: add/remove CIDRs in vpn-routes-custom.txt and isp-routes-custom.txt, apply changes without full redeploy
-- Live log view: stream splitgate-watch daemon output in browser (tail/websocket)
-- System status dashboard: AWG tunnel health, splitgate-watch daemon state, RU list last-updated, active route counts
-- Config management: view/edit ru-list-exclude.txt, trigger manual RU list refresh
-- Auth: simple password protection (single shared secret, no multi-user needed)
-- Deploy: runs as systemd service on RPi; accessible at http://192.168.1.254:PORT from LAN
+- WEB-01: Route management: add/remove CIDRs in vpn-routes-custom.txt and isp-routes-custom.txt, apply changes without full redeploy
+- WEB-02: Live log view: stream splitgate-watch daemon output in browser (SSE)
+- WEB-03: System status dashboard: AWG tunnel health, splitgate-watch daemon state, RU list last-updated, active route counts
+- WEB-04: Config management: view/edit ru-list-exclude.txt, trigger manual RU list refresh
+- WEB-05: Auth: simple password protection (single shared secret, no multi-user needed)
+- WEB-06: Deploy: runs as systemd service on RPi; accessible at http://192.168.1.254:PORT from LAN
 **Depends on:** Phase 13 (daemon + logs), Phase 14 (dnsmasq ipset, optional)
-**Plans:** 0 plans
+**Plans:** 4 plans
+
+> **DRAFT** — confirm technology decisions (checkpoint in Plan 01) before executing.
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 15 to break down)
+
+**Wave 1:**
+
+- [ ] 15-01-PLAN.md — Python Flask backend: auth (Basic Auth + /etc/splitgate/admin.secret), all 13 API endpoints (status, route CRUD, config management, SSE log stream), embedded HTML skeleton [WEB-01..WEB-05]
+
+**Wave 2 (parallel after Wave 1):**
+
+- [ ] 15-02-PLAN.md — Full frontend HTML/CSS/JS: Status tab (auto-refresh), Routes tab (add/remove + Apply), Config tab (ru-list-exclude editor + RU refresh), Logs tab (SSE EventSource, [VPN]=cyan/[ISP]=yellow coloring) [WEB-01..WEB-04]
+- [ ] 15-03-PLAN.md — Systemd unit (splitgate-admin.service) + deploy.sh Stage 28 (TOTAL_STAGES=29) + vpn-rollback.sh teardown + .env ADMIN_PORT=8080 [WEB-06]
+
+**Wave 3 (after Wave 2):**
+
+- [ ] 15-04-PLAN.md — splitgate admin subcommand (status/start/stop) + README.md + docs/REFERENCE.md (API table) + docs/README.ru.md + STATE.md Phase 15 decisions [WEB-05, WEB-06]
 
 ---
 *Created: 2026-05-18*
-*Updated: 2026-06-27 — Phase 15 added: web admin UI*
+*Updated: 2026-06-27 — Phase 15 added: web admin UI (4 plans, 3 waves, DRAFT)*
