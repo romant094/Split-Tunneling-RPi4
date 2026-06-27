@@ -358,5 +358,23 @@ Plans:
 - [ ] TBD (run /gsd-plan-phase 14 to break down)
 
 ---
+
+### Phase 15: Web Admin Interface
+
+**Goal:** Lightweight web UI running on the RPi that lets any LAN device manage the gateway without SSH — add/remove VPN or ISP route exceptions, view live traffic logs, reload routing rules, check system status (VPN tunnel up/down, daemon status, last RU list update).
+**Requirements**:
+- Route management: add/remove CIDRs in vpn-routes-custom.txt and isp-routes-custom.txt, apply changes without full redeploy
+- Live log view: stream splitgate-watch daemon output in browser (tail/websocket)
+- System status dashboard: AWG tunnel health, splitgate-watch daemon state, RU list last-updated, active route counts
+- Config management: view/edit ru-list-exclude.txt, trigger manual RU list refresh
+- Auth: simple password protection (single shared secret, no multi-user needed)
+- Deploy: runs as systemd service on RPi; accessible at http://192.168.1.254:PORT from LAN
+**Depends on:** Phase 13 (daemon + logs), Phase 14 (dnsmasq ipset, optional)
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 15 to break down)
+
+---
 *Created: 2026-05-18*
-*Updated: 2026-05-29 — Phase 13 planned: 4 plans across 3 waves*
+*Updated: 2026-06-27 — Phase 15 added: web admin UI*
