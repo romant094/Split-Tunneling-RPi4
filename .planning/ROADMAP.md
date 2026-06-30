@@ -361,7 +361,7 @@ Plans:
 
 ### Phase 15: Web Admin Interface
 
-**Goal:** Lightweight web UI running on the RPi that lets any LAN device manage the gateway without SSH — add/remove VPN or ISP route exceptions, view live traffic logs, reload routing rules, check system status (VPN tunnel up/down, daemon status, last RU list update).
+**Goal:** React SPA admin interface running on the RPi at http://192.168.1.254:8080 — lets any LAN device manage the gateway without SSH: service control, route exceptions, all system logs, config editing, and full rollback.
 **Requirements**:
 - WEB-01: Route management: add/remove CIDRs in vpn-routes-custom.txt and isp-routes-custom.txt, apply changes without full redeploy
 - WEB-02: Live log view: stream splitgate-watch daemon output in browser (SSE)
@@ -372,23 +372,21 @@ Plans:
 **Depends on:** Phase 13 (daemon + logs), Phase 14 (dnsmasq ipset, optional)
 **Plans:** 4 plans
 
-> **DRAFT** — confirm technology decisions (checkpoint in Plan 01) before executing.
-
 Plans:
 
 **Wave 1:**
 
-- [ ] 15-01-PLAN.md — Python Flask backend: auth (Basic Auth + /etc/splitgate/admin.secret), all 13 API endpoints (status, route CRUD, config management, SSE log stream), embedded HTML skeleton [WEB-01..WEB-05]
+- [ ] 15-01-PLAN.md — Flask backend (src/scripts/splitgate-admin.py): HTTP Basic Auth, static file serving for React SPA dist/, all 17+ API endpoints (status, services, routes, logs SSE, config, settings, rollback); src/admin/.gitignore [WEB-01..WEB-06]
 
 **Wave 2 (parallel after Wave 1):**
 
-- [ ] 15-02-PLAN.md — Full frontend HTML/CSS/JS: Status tab (auto-refresh), Routes tab (add/remove + Apply), Config tab (ru-list-exclude editor + RU refresh), Logs tab (SSE EventSource, [VPN]=cyan/[ISP]=yellow coloring) [WEB-01..WEB-04]
-- [ ] 15-03-PLAN.md — Systemd unit (splitgate-admin.service) + deploy.sh Stage 28 (TOTAL_STAGES=29) + vpn-rollback.sh teardown + .env ADMIN_PORT=8080 [WEB-06]
+- [ ] 15-02-PLAN.md — React SPA (src/admin/): Vite+React scaffold, 6 pages (Dashboard/Services/Routes/Logs/Config/Settings), HashRouter, SSE EventSource on Logs page, service button state rules per D-12, Rollback modal per D-14; npm run build + dist/ committed [WEB-01..WEB-04]
+- [ ] 15-03-PLAN.md — Systemd unit (src/systemd/splitgate-admin.service) + deploy.sh Stage 29 conditional deploy (TOTAL_STAGES=29) + vpn-rollback.sh admin teardown + ADMIN_PORT=8080 in .env [WEB-05, WEB-06]
 
 **Wave 3 (after Wave 2):**
 
-- [ ] 15-04-PLAN.md — splitgate admin subcommand (status/start/stop) + README.md + docs/REFERENCE.md (API table) + docs/README.ru.md + STATE.md Phase 15 decisions [WEB-05, WEB-06]
+- [ ] 15-04-PLAN.md — splitgate admin subcommand (status/start/stop/restart) + README.md Web Admin section + docs/REFERENCE.md full API table + docs/README.ru.md Russian translation + .planning/STATE.md Phase 15 decisions [WEB-05, WEB-06]
 
 ---
 *Created: 2026-05-18*
-*Updated: 2026-06-27 — Phase 15 added: web admin UI (4 plans, 3 waves, DRAFT)*
+*Updated: 2026-06-30 — Phase 15 plans finalized: React SPA + Flask backend, 4 plans, 3 waves*
