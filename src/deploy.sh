@@ -88,8 +88,17 @@ LOGROTATE_CONF_TMP="/tmp/logrotate-vpn-gateway.tmp"
 WATCH_SERVICE_LOCAL="systemd/splitgate-watch.service"
 WATCH_SERVICE_REMOTE="/etc/systemd/system/splitgate-watch.service"
 WATCH_SERVICE_TMP="/tmp/splitgate-watch.service.tmp"
+ADMIN_PY_LOCAL="scripts/splitgate-admin.py"
+ADMIN_PY_REMOTE="/usr/local/bin/splitgate-admin"
+ADMIN_PY_TMP="/tmp/splitgate-admin.py.tmp"
+ADMIN_SERVICE_LOCAL="systemd/splitgate-admin.service"
+ADMIN_SERVICE_REMOTE="/etc/systemd/system/splitgate-admin.service"
+ADMIN_SERVICE_TMP="/tmp/splitgate-admin.service.tmp"
+ADMIN_DIST_LOCAL="admin/dist"
+ADMIN_DIST_REMOTE="/etc/splitgate/admin"
+ADMIN_SECRET_REMOTE="/etc/splitgate/admin.secret"
 
-TOTAL_STAGES=28
+TOTAL_STAGES=29
 
 # ─── Argument Parsing (D-12) ─────────────────────────────────────────────────
 RUN_ROUTING=true
@@ -180,6 +189,14 @@ if [[ ! -f "$SPLITGATE_DISPATCHER_LOCAL" ]]; then
 fi
 if [[ ! -f "$LOGROTATE_CONF_LOCAL" ]]; then
     echo "ERROR: $LOGROTATE_CONF_LOCAL not found — run as: bash src/deploy.sh" >&2
+    exit 1
+fi
+if [[ ! -f "$ADMIN_PY_LOCAL" ]]; then
+    echo "ERROR: $ADMIN_PY_LOCAL not found — run as: bash src/deploy.sh" >&2
+    exit 1
+fi
+if [[ ! -f "$ADMIN_SERVICE_LOCAL" ]]; then
+    echo "ERROR: $ADMIN_SERVICE_LOCAL not found — run as: bash src/deploy.sh" >&2
     exit 1
 fi
 
@@ -478,6 +495,37 @@ ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${WATCH_SERVICE_TMP} ${WATCH_SERVICE
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo systemctl daemon-reload && sudo systemctl enable --now splitgate-watch.service"
 echo "       splitgate-watch.service deployed and enabled (auto-starts on boot)."
 
+# ─── Stage 29: Deploy splitgate-admin (conditional on src/admin/dist/ — D-05) ─
+echo "[29/${TOTAL_STAGES}] Checking for admin UI build at ${ADMIN_DIST_LOCAL}..."
+if [ -d "${ADMIN_DIST_LOCAL}" ]; then
+  echo "[29/${TOTAL_STAGES}] Deploying splitgate admin UI and backend to ${SSH_HOST}..."
+
+  # 29a: Deploy splitgate-admin.py backend
+  scp -o BatchMode=yes "${ADMIN_PY_LOCAL}" "${SSH_HOST}:${ADMIN_PY_TMP}"
+  ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${ADMIN_PY_TMP} ${ADMIN_PY_REMOTE} && sudo chmod +x ${ADMIN_PY_REMOTE} && sudo chown root:root ${ADMIN_PY_REMOTE}"
+  echo "       splitgate-admin.py deployed to ${ADMIN_PY_REMOTE} (chmod +x, root:root)"
+
+  # 29b: Deploy admin dist/ to /etc/splitgate/admin/
+  ssh -o BatchMode=yes "${SSH_HOST}" "sudo rm -rf /tmp/admin-dist-tmp && mkdir -p /tmp/admin-dist-tmp"
+  scp -r -o BatchMode=yes "${ADMIN_DIST_LOCAL}/." "${SSH_HOST}:/tmp/admin-dist-tmp/"
+  ssh -o BatchMode=yes "${SSH_HOST}" "sudo mkdir -p ${ADMIN_DIST_REMOTE} && sudo cp -r /tmp/admin-dist-tmp/. ${ADMIN_DIST_REMOTE}/ && sudo rm -rf /tmp/admin-dist-tmp && sudo chown -R root:root ${ADMIN_DIST_REMOTE}"
+  echo "       admin/dist deployed to ${ADMIN_DIST_REMOTE} (root:root)"
+
+  # 29c: Deploy splitgate-admin.service
+  scp -o BatchMode=yes "${ADMIN_SERVICE_LOCAL}" "${SSH_HOST}:${ADMIN_SERVICE_TMP}"
+  ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${ADMIN_SERVICE_TMP} ${ADMIN_SERVICE_REMOTE} && sudo chmod 644 ${ADMIN_SERVICE_REMOTE} && sudo chown root:root ${ADMIN_SERVICE_REMOTE}"
+  echo "       splitgate-admin.service deployed (mode 644, root:root)"
+
+  # 29d: Create admin.secret if not present, reload systemd, enable service
+  ssh -o BatchMode=yes "${SSH_HOST}" "[ -f ${ADMIN_SECRET_REMOTE} ] || (sudo sh -c 'printf admin > ${ADMIN_SECRET_REMOTE}' && sudo chmod 600 ${ADMIN_SECRET_REMOTE} && sudo chown root:root ${ADMIN_SECRET_REMOTE} && echo '       Created default admin.secret with password: admin — CHANGE THIS')"
+  ssh -o BatchMode=yes "${SSH_HOST}" "sudo systemctl daemon-reload && sudo systemctl enable --now splitgate-admin.service"
+  echo "       splitgate-admin.service enabled and started (accessible at http://192.168.1.254:${ADMIN_PORT:-8080})"
+  echo "       Default password: admin — change via Settings page or: echo NEWPASS | sudo tee ${ADMIN_SECRET_REMOTE}"
+else
+  echo "[29/${TOTAL_STAGES}] Admin UI not built — skipping admin stages (${ADMIN_DIST_LOCAL}/ missing)"
+  echo "       To deploy admin: cd src/admin && npm run build && cd ../.. && bash src/deploy.sh"
+fi
+
 # ─── Final Summary ───────────────────────────────────────────────────────────
 # Tunnel bring-up is automated in Stage 12 (guarded by ip link show — Pitfall 5 safe).
 # --no-run skips both tunnel bring-up and routing.sh; run manually in that case.
@@ -507,6 +555,7 @@ echo "   PHASE 8: ${EXCLUDE_LIST_REMOTE} (mode 644, root:root, optional — depl
 echo "   PHASE 10: ${SPLITGATE_DISPATCHER_REMOTE} (chmod +x, root:root — ergonomic CLI dispatcher)"
 echo "   PHASE 10: ${LOGROTATE_CONF_REMOTE} (mode 644, root:root — log rotation config for /etc/splitgate/logs/install.log)"
 echo "   PHASE 13: ${WATCH_SERVICE_REMOTE} (mode 644, root:root — splitgate-watch daemon)"
+echo "   PHASE 15: ${ADMIN_PY_REMOTE} + ${ADMIN_DIST_REMOTE} + ${ADMIN_SERVICE_REMOTE} (conditional on src/admin/dist/)"
 echo ""
 echo " Next steps:"
 echo ""

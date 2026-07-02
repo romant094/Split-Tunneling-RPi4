@@ -1,0 +1,21 @@
+# splitgate-admin.service — systemd unit for the splitgate web admin interface
+# Deployed to /etc/systemd/system/splitgate-admin.service by deploy.sh Stage 29.
+# Flask serves React SPA from /etc/splitgate/admin/ and REST API on ADMIN_PORT (default 8080).
+# Runs as root (D-11) — required for systemctl commands and /etc/splitgate/ file writes.
+# See: http://192.168.1.254:8080 from any LAN device (D-10).
+
+[Unit]
+Description=Splitgate web admin interface
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/local/bin/splitgate-admin
+EnvironmentFile=/etc/splitgate/vpn-gateway.env
+StandardOutput=null
+StandardError=append:/etc/splitgate/logs/admin-error.log
+Restart=on-failure
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target

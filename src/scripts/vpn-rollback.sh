@@ -43,6 +43,12 @@ source /etc/splitgate/vpn-gateway.env
 
 log "Starting VPN gateway rollback..."
 
+# ─── Step 0: Stop + disable splitgate-admin.service (Phase 15) ────────────────
+log "Stopping splitgate-admin.service..."
+systemctl stop splitgate-admin.service 2>/dev/null || true
+systemctl disable splitgate-admin.service 2>/dev/null || true
+log "splitgate-admin.service: stopped and disabled"
+
 # ─── Step 1a: Stop + disable splitgate-watch.service (Phase 13 D-10) ─────────
 log "Stopping splitgate-watch.service..."
 systemctl stop splitgate-watch.service 2>/dev/null || true
@@ -135,6 +141,10 @@ log "Default route restored: default via ${KEENETIC_GW}"
 # rm -f / rm -rf handle absence silently.
 rm -f /usr/local/bin/splitgate
 log "Removed /usr/local/bin/splitgate"
+rm -f /usr/local/bin/splitgate-admin
+log "Removed /usr/local/bin/splitgate-admin"
+rm -f /etc/systemd/system/splitgate-admin.service
+log "Removed /etc/systemd/system/splitgate-admin.service"
 rm -f /etc/logrotate.d/vpn-gateway
 log "Removed /etc/logrotate.d/vpn-gateway"
 rm -rf /etc/splitgate
@@ -146,6 +156,7 @@ echo "================================================================"
 echo " VPN gateway rollback complete."
 echo "================================================================"
 echo " Stopped and disabled:"
+echo "   splitgate-admin.service"
 echo "   vpn-routing.service"
 echo "   awg-quick@${VPN_IFACE}"
 echo " Routes flushed: dev ${VPN_IFACE}"
@@ -157,6 +168,8 @@ echo " Default route restored: via ${KEENETIC_GW}"
 echo ""
 echo " Removed (D-18 splitgate teardown):"
 echo "   /usr/local/bin/splitgate"
+echo "   /usr/local/bin/splitgate-admin"
+echo "   /etc/systemd/system/splitgate-admin.service"
 echo "   /etc/logrotate.d/vpn-gateway"
 echo "   /etc/splitgate/ (entire tree, including white-list.txt, isp-routes-custom.txt, vpn-routes-custom.txt, ru-list-exclude.txt, vpn-gateway.env, logs/)"
 echo ""
