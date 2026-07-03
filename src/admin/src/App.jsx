@@ -24,7 +24,7 @@ function LoginForm({ onLogin }) {
       const r = await apiFetch('/api/status');
       if (r.status === 401) {
         clearAuth();
-        setError('Wrong password');
+        setError('Wrong credentials');
       } else {
         onLogin();
       }
@@ -35,14 +35,54 @@ function LoginForm({ onLogin }) {
   }
 
   return (
-    <div className="login-container">
-      <h1>Splitgate Admin</h1>
-      <form onSubmit={handleSubmit} className="login-form">
-        <input value={user} onChange={e => setUser(e.target.value)} placeholder="Username" autoComplete="username" />
-        <input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="Password" autoComplete="current-password" autoFocus />
-        {error && <div className="error">{error}</div>}
-        <button type="submit" disabled={loading}>{loading ? 'Connecting...' : 'Login'}</button>
-      </form>
+    <div className="login-bg">
+      <div className="login-card">
+        <div className="login-logo">
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+            <circle cx="20" cy="20" r="20" fill="#4caf50" fillOpacity="0.15"/>
+            <path d="M20 8 L28 14 L28 22 C28 27 24 31 20 33 C16 31 12 27 12 22 L12 14 Z" stroke="#4caf50" strokeWidth="2" fill="none"/>
+            <path d="M16 20 L19 23 L24 17" stroke="#4caf50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+        <h1 className="login-title">Splitgate</h1>
+        <p className="login-subtitle">VPN Gateway Admin</p>
+        <form onSubmit={handleSubmit} className="login-form">
+          <div className="login-field">
+            <label>Username</label>
+            <input
+              value={user}
+              onChange={e => setUser(e.target.value)}
+              autoComplete="username"
+              spellCheck={false}
+            />
+          </div>
+          <div className="login-field">
+            <label>Password</label>
+            <input
+              type="password"
+              value={pass}
+              onChange={e => setPass(e.target.value)}
+              autoComplete="current-password"
+              autoFocus
+            />
+          </div>
+          {error && (
+            <div className="login-error">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <circle cx="7" cy="7" r="6" stroke="#f44336" strokeWidth="1.5"/>
+                <path d="M7 4v3.5M7 9.5v.5" stroke="#f44336" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+              {error}
+            </div>
+          )}
+          <button type="submit" className="login-btn" disabled={loading}>
+            {loading ? (
+              <span className="login-spinner">●●●</span>
+            ) : 'Sign in'}
+          </button>
+        </form>
+        <div className="login-hint">192.168.1.254:8080</div>
+      </div>
     </div>
   );
 }

@@ -382,6 +382,9 @@ def index():
 @app.route('/<path:path>')
 @require_auth
 def static_files(path):
+    file_path = os.path.join(ADMIN_DIST_DIR, path)
+    if os.path.isfile(file_path):
+        return send_from_directory(ADMIN_DIST_DIR, path)
     return send_from_directory(ADMIN_DIST_DIR, 'index.html')
 
 
