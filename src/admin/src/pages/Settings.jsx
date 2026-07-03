@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Eye, EyeOff, RefreshCw, Upload } from 'lucide-react'
+import { Eye, EyeOff, Upload } from 'lucide-react'
 import { apiFetch } from '../api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,7 +12,6 @@ import { Separator } from '@/components/ui/separator'
 
 // Only these env vars are surfaced in the UI
 const ENV_CONFIG = [
-  { key: 'ADMIN_PORT', label: 'Admin port', hint: 'Port the admin web interface listens on. Requires service restart to take effect.' },
   { key: 'RU_SUBNET_URL', label: 'Route list URL', hint: 'URL to fetch Russian IP ranges from (used by the daily update cron).' },
   { key: 'UPDATE_INTERVAL', label: 'Route update interval', hint: 'How often the RU IP list is refreshed (cron expression or interval).' },
 ]
@@ -21,20 +20,16 @@ function EnvVars() {
   const [vars, setVars] = useState({})
   const [edited, setEdited] = useState({})
   const [msg, setMsg] = useState('')
-  const [restarting, setRestarting] = useState(false)
-  const [portChanged, setPortChanged] = useState(false)
 
   useEffect(() => {
     apiFetch('/api/settings/env').then(r => r.json()).then(d => {
       setVars(d.vars || {})
       setEdited({})
-      setPortChanged(false)
     }).catch(() => {})
   }, [])
 
   function handleChange(k, v) {
     setEdited(e => ({ ...e, [k]: v }))
-    if (k === 'ADMIN_PORT') setPortChanged(true)
   }
 
   async function save() {
@@ -46,16 +41,6 @@ function EnvVars() {
       setVars(v => ({ ...v, ...changed }))
       setEdited({})
     }
-  }
-
-  async function restartAdmin() {
-    setRestarting(true)
-    setMsg('Restarting admin service…')
-    await apiFetch('/api/settings/restart-admin', { method: 'POST' })
-    setMsg('Restarting — page will reload in 5 s')
-    setPortChanged(false)
-    setRestarting(false)
-    setTimeout(() => window.location.reload(), 5000)
   }
 
   const visibleKeys = ENV_CONFIG.filter(c => c.key in vars)
@@ -89,13 +74,7 @@ function EnvVars() {
         })}
         <div className="flex items-center gap-3 flex-wrap pt-1">
           <Button size="sm" onClick={save}>Save</Button>
-          {portChanged && (
-            <Button size="sm" variant="outline" onClick={restartAdmin} disabled={restarting}>
-              <RefreshCw className="h-3.5 w-3.5 mr-1" />
-              Restart Admin
-            </Button>
-          )}
-          {msg && <span className={`text-sm ${msg.startsWith('✓') || msg.startsWith('Restart') ? 'text-primary' : 'text-destructive'}`}>{msg}</span>}
+          {msg && <span className={`text-sm ${msg.startsWith('✓') ? 'text-primary' : 'text-destructive'}`}>{msg}</span>}
         </div>
       </CardContent>
     </Card>

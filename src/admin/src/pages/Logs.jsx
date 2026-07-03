@@ -1,22 +1,23 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { format } from 'date-fns'
 import { apiFetch } from '../api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Download, Plus, X, Filter } from 'lucide-react'
+import { Calendar } from '@/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Download, Plus, X, Filter, CalendarIcon } from 'lucide-react'
 import { setOnPage, setBgMode as setStreamBgMode, getBgMode, subscribeLines, subscribeMeta, clearLines } from '../logStream'
+import { cn } from '@/lib/utils'
 
 const MAX_FILTERS = 5
 
-function todayStart() {
+function nowDate() { return new Date() }
+function startOfToday() {
   const d = new Date()
   d.setHours(0, 0, 0, 0)
-  return d.toISOString().slice(0, 16)
-}
-
-function nowStr() {
-  return new Date().toISOString().slice(0, 16)
+  return d
 }
 
 function applyFilters(lines, filters) {
@@ -37,7 +38,7 @@ function downloadLines(lines, filename) {
   URL.revokeObjectURL(url)
 }
 
-function LogBox({ lines }) {
+function LogBox({ lines, colorize = false }) {
   const ref = useRef(null)
   useEffect(() => {
     if (ref.current) ref.current.scrollTop = ref.current.scrollHeight
@@ -46,8 +47,10 @@ function LogBox({ lines }) {
     <div className="log-container" ref={ref}>
       {lines.map((line, i) => {
         let cls = ''
-        if (line.includes('[VPN]')) cls = 'log-line-vpn'
-        else if (line.includes('[ISP]')) cls = 'log-line-isp'
+        if (colorize) {
+          if (line.includes('[VPN]')) cls = 'log-line-vpn'
+          else if (line.includes('[ISP]')) cls = 'log-line-isp'
+        }
         return <div key={i} className={cls}>{line || ' '}</div>
       })}
       {lines.length === 0 && <div className="text-muted-foreground">No output</div>}
@@ -99,6 +102,42 @@ function FilterBar({ filters, onChange }) {
   )
 }
 
+function DateTimePicker({ label, date, time, onDateChange, onTimeChange, maxDate }) {
+  const [open, setOpen] = useState(false)
+  const displayStr = date ? `${format(date, 'dd MMM yyyy')} ${time || '00:00'}` : null
+
+  return (
+    <div className="space-y-1">
+      {label && <Label className="text-xs text-muted-foreground">{label}</Label>}
+      <div className="flex items-center gap-1">
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className={cn("h-8 justify-start text-left font-normal w-36", !date && "text-muted-foreground")}>
+              <CalendarIcon className="mr-2 h-3.5 w-3.5 shrink-0" />
+              {date ? format(date, 'dd MMM yyyy') : <span>Pick date</span>}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={date}
+              onSelect={d => { onDateChange(d); setOpen(false) }}
+              disabled={maxDate ? d => d > maxDate : undefined}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
+        <Input
+          type="time"
+          value={time}
+          onChange={e => onTimeChange(e.target.value)}
+          className="h-8 w-24 text-sm font-mono"
+        />
+      </div>
+    </div>
+  )
+}
+
 function StaticLog({ endpoint }) {
   const [lines, setLines] = useState([])
   function load() {
@@ -108,7 +147,7 @@ function StaticLog({ endpoint }) {
   return (
     <div className="space-y-3">
       <Button size="sm" variant="outline" onClick={load}>Refresh</Button>
-      <LogBox lines={lines} />
+      <LogBox lines={lines} colorize={false} />
     </div>
   )
 }
@@ -116,21 +155,18 @@ function StaticLog({ endpoint }) {
 export default function Logs() {
   const [activeTab, setActiveTab] = useState('live')
 
-  // Live log state — backed by the module singleton
   const [liveLines, setLiveLines] = useState([])
   const [liveMeta, setLiveMeta] = useState({ connected: false, bgMode: false })
-
-  // Shared filter state across live and historical tabs
   const [filters, setFilters] = useState([''])
 
-  // Historical state
-  const [histFrom, setHistFrom] = useState(todayStart())
-  const [histTo, setHistTo] = useState('')
+  const [histFromDate, setHistFromDate] = useState(startOfToday())
+  const [histFromTime, setHistFromTime] = useState('00:00')
+  const [histToDate, setHistToDate] = useState(null)
+  const [histToTime, setHistToTime] = useState('23:59')
   const [histLines, setHistLines] = useState([])
   const [histLoading, setHistLoading] = useState(false)
   const [histMsg, setHistMsg] = useState('')
 
-  // Subscribe to singleton on mount, unsubscribe on unmount
   useEffect(() => {
     const unsubLines = subscribeLines(setLiveLines)
     const unsubMeta = subscribeMeta(setLiveMeta)
@@ -147,10 +183,11 @@ export default function Logs() {
   }
 
   async function loadHistory() {
+    if (!histFromDate) { setHistMsg('Select a start date'); return }
     setHistLoading(true)
     setHistMsg('')
-    const fromDate = histFrom.slice(0, 10)
-    const toDate = histTo ? histTo.slice(0, 10) : fromDate
+    const fromDate = format(histFromDate, 'yyyy-MM-dd')
+    const toDate = histToDate ? format(histToDate, 'yyyy-MM-dd') : fromDate
     try {
       const r = await apiFetch(`/api/logs/history?from=${fromDate}&to=${toDate}`)
       const d = await r.json()
@@ -165,8 +202,10 @@ export default function Logs() {
   const visibleLive = applyFilters(liveLines, filters)
   const visibleHist = applyFilters(histLines, filters)
 
-  const liveFilename = `splitgate-live-${new Date().toISOString().slice(0, 10)}.txt`
-  const histFilename = `splitgate-hist-${histFrom.slice(0, 10)}${histTo ? `-${histTo.slice(0, 10)}` : ''}.txt`
+  const liveFilename = `splitgate-live-${format(new Date(), 'yyyy-MM-dd')}.txt`
+  const histFilename = histFromDate
+    ? `splitgate-hist-${format(histFromDate, 'yyyy-MM-dd')}${histToDate ? `-${format(histToDate, 'yyyy-MM-dd')}` : ''}.txt`
+    : 'splitgate-hist.txt'
 
   return (
     <div className="space-y-6">
@@ -210,45 +249,43 @@ export default function Logs() {
             </Button>
           </div>
           <FilterBar filters={filters} onChange={setFilters} />
-          <LogBox lines={visibleLive} />
+          <LogBox lines={visibleLive} colorize={true} />
         </TabsContent>
 
         {/* Historical */}
         <TabsContent value="history" className="mt-4 space-y-3">
           <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">From</Label>
-              <input
-                type="datetime-local"
-                value={histFrom}
-                max={nowStr()}
-                onChange={e => setHistFrom(e.target.value)}
-                className="h-8 rounded-md border border-input bg-background px-3 text-sm text-foreground"
-              />
-            </div>
+            <DateTimePicker
+              label="From"
+              date={histFromDate}
+              time={histFromTime}
+              onDateChange={setHistFromDate}
+              onTimeChange={setHistFromTime}
+              maxDate={nowDate()}
+            />
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">To <span className="font-normal">(optional)</span></Label>
               <div className="flex items-center gap-1">
-                <input
-                  type="datetime-local"
-                  value={histTo}
-                  max={nowStr()}
-                  onChange={e => setHistTo(e.target.value)}
-                  className="h-8 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+                <DateTimePicker
+                  date={histToDate}
+                  time={histToTime}
+                  onDateChange={setHistToDate}
+                  onTimeChange={setHistToTime}
+                  maxDate={nowDate()}
                 />
-                {histTo && (
-                  <button onClick={() => setHistTo('')} className="text-muted-foreground hover:text-foreground">
+                {histToDate && (
+                  <button onClick={() => setHistToDate(null)} className="text-muted-foreground hover:text-foreground ml-1">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
             </div>
-            <Button size="sm" variant="outline" onClick={loadHistory} disabled={histLoading} className="h-8">
+            <Button size="sm" variant="outline" onClick={loadHistory} disabled={histLoading} className="h-8 self-end">
               {histLoading ? 'Loading…' : 'Load'}
             </Button>
-            {histMsg && <span className="text-xs text-muted-foreground self-center">{histMsg}</span>}
+            {histMsg && <span className="text-xs text-muted-foreground self-end pb-1">{histMsg}</span>}
             {histLines.length > 0 && (
-              <Button size="sm" variant="ghost" className="h-8 ml-auto"
+              <Button size="sm" variant="ghost" className="h-8 self-end ml-auto"
                 onClick={() => downloadLines(visibleHist, histFilename)}>
                 <Download className="h-3.5 w-3.5 mr-1" />Download
               </Button>
@@ -258,7 +295,7 @@ export default function Logs() {
             <>
               <FilterBar filters={filters} onChange={setFilters} />
               <p className="text-xs text-muted-foreground">{visibleHist.length} / {histLines.length} lines shown</p>
-              <LogBox lines={visibleHist} />
+              <LogBox lines={visibleHist} colorize={false} />
             </>
           )}
           {histLines.length === 0 && !histLoading && (

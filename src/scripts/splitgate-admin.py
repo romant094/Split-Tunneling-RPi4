@@ -12,7 +12,7 @@ from flask import Flask, request, jsonify, send_from_directory, Response, stream
 
 ADMIN_SECRET_PATH = '/etc/splitgate/admin.secret'
 ADMIN_DIST_DIR = '/etc/splitgate/admin'
-ADMIN_PORT = int(os.environ.get('ADMIN_PORT', 8080))
+ADMIN_PORT = int(os.environ.get('ADMIN_PORT', 80))
 VPN_CUSTOM_ROUTES = '/etc/splitgate/vpn-routes-custom.txt'
 ISP_CUSTOM_ROUTES = '/etc/splitgate/isp-routes-custom.txt'
 RU_EXCLUDE_PATH = '/etc/splitgate/ru-list-exclude.txt'

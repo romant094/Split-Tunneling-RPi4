@@ -3,7 +3,6 @@ import { apiFetch } from '../api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
 
 // Admin is excluded from this page (managed separately)
 const DISPLAY_SERVICES = ['awg0', 'splitgate-watch', 'networking', 'dnsmasq']
@@ -131,20 +130,27 @@ export default function Services() {
         })}
       </div>
 
-      <Separator />
-
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="text-sm text-muted-foreground">Bulk actions (excluding admin):</span>
-        <Button size="sm" disabled={!!bulkLoading} onClick={() => bulkAction('start')}>
-          {bulkLoading === 'start' ? 'Starting…' : 'Start All'}
-        </Button>
-        <Button size="sm" variant="destructive" disabled={!!bulkLoading} onClick={() => bulkAction('stop')}>
-          {bulkLoading === 'stop' ? 'Stopping…' : 'Stop All'}
-        </Button>
-        <Button size="sm" variant="outline" disabled={!!bulkLoading} onClick={() => bulkAction('restart')}>
-          {bulkLoading === 'restart' ? 'Restarting…' : 'Restart All'}
-        </Button>
-      </div>
+      <Card>
+        <CardContent className="pt-4 pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <span className="font-medium text-sm">Bulk Actions</span>
+              <p className="text-muted-foreground text-sm mt-0.5">Apply action to all services (admin excluded).</p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button size="sm" disabled={!!bulkLoading} onClick={() => bulkAction('start')}>
+                {bulkLoading === 'start' ? 'Starting…' : 'Start All'}
+              </Button>
+              <Button size="sm" variant="destructive" disabled={!!bulkLoading} onClick={() => bulkAction('stop')}>
+                {bulkLoading === 'stop' ? 'Stopping…' : 'Stop All'}
+              </Button>
+              <Button size="sm" variant="outline" disabled={!!bulkLoading} onClick={() => bulkAction('restart')}>
+                {bulkLoading === 'restart' ? 'Restarting…' : 'Restart All'}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

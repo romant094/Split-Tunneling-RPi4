@@ -23,8 +23,14 @@ echo "[3/4] Uploading splitgate-admin.py to ${SSH_HOST}:${ADMIN_PY_REMOTE}..."
 scp -o BatchMode=yes scripts/splitgate-admin.py "${SSH_HOST}:/tmp/sg-admin-py.tmp"
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv /tmp/sg-admin-py.tmp ${ADMIN_PY_REMOTE} && sudo chmod +x ${ADMIN_PY_REMOTE} && sudo chown root:root ${ADMIN_PY_REMOTE}"
 
-echo "[4/4] Restarting splitgate-admin.service..."
+echo "[4/5] Configuring port 80 and splitgate.lan domain..."
+ssh -o BatchMode=yes "${SSH_HOST}" "sudo sed -i 's/^ADMIN_PORT=.*/ADMIN_PORT=80/' /etc/splitgate/vpn-gateway.env 2>/dev/null || true"
+ssh -o BatchMode=yes "${SSH_HOST}" "grep -q '^ADMIN_PORT=' /etc/splitgate/vpn-gateway.env || echo 'ADMIN_PORT=80' | sudo tee -a /etc/splitgate/vpn-gateway.env"
+DNSMASQ_CONF="/etc/dnsmasq.d/splitgate-local.conf"
+ssh -o BatchMode=yes "${SSH_HOST}" "echo 'address=/splitgate.lan/192.168.1.254' | sudo tee ${DNSMASQ_CONF} && sudo systemctl reload dnsmasq 2>/dev/null || sudo systemctl restart dnsmasq"
+
+echo "[5/5] Restarting splitgate-admin.service..."
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo systemctl restart splitgate-admin.service"
 
 echo ""
-echo "Admin deployed → http://192.168.1.254:8080"
+echo "Admin deployed → http://splitgate.lan"

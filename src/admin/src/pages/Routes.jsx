@@ -205,6 +205,7 @@ function SortIcon({ field, sortField, sortDir }) {
 
 function RouteSection({ endpoint }) {
   const [routes, setRoutes] = useState([])
+  const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('')
   const [sortField, setSortField] = useState('cidr')
   const [sortDir, setSortDir] = useState('asc')
@@ -217,11 +218,11 @@ function RouteSection({ endpoint }) {
   function load() {
     apiFetch(`/api/routes/${endpoint}`)
       .then(r => r.json())
-      .then(d => setRoutes(d.routes || []))
-      .catch(() => {})
+      .then(d => { setRoutes(d.routes || []); setLoading(false) })
+      .catch(() => { setLoading(false) })
   }
 
-  useEffect(() => { load() }, [endpoint])
+  useEffect(() => { setLoading(true); load() }, [endpoint])
 
   function toggleSort(field) {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -284,7 +285,9 @@ function RouteSection({ endpoint }) {
         </div>
       </div>
       {msg && <p className="text-destructive text-sm">{msg}</p>}
-      {sorted.length === 0 ? (
+      {loading ? (
+        <p className="text-muted-foreground text-sm py-4">Loading…</p>
+      ) : sorted.length === 0 ? (
         <p className="text-muted-foreground text-sm py-4">
           {filter ? 'No routes match the filter.' : 'No routes configured.'}
         </p>

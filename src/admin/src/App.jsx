@@ -96,7 +96,7 @@ function LoginForm({ onLogin }) {
           </CardContent>
         </Card>
 
-        <p className="text-center text-muted-foreground/30 text-xs mt-6 font-mono">192.168.1.254:8080</p>
+        <p className="text-center text-muted-foreground/30 text-xs mt-6 font-mono">192.168.1.254</p>
       </div>
     </div>
   )
@@ -145,10 +145,10 @@ export default function App() {
         {/* Top nav */}
         <nav className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
           <div className="max-w-7xl mx-auto px-4 flex items-center h-14 gap-4">
-            <div className="flex items-center gap-2 font-semibold text-primary shrink-0">
+            <NavLink to="/" className="flex items-center gap-2 font-semibold text-primary shrink-0 hover:opacity-80 transition-opacity">
               <Shield className="h-5 w-5" />
               <span>Splitgate</span>
-            </div>
+            </NavLink>
 
             {/* Desktop nav */}
             <div className="hidden md:flex items-center gap-1 flex-1">
