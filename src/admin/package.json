@@ -7,8 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview",
-    "deploy:admin": "npm run build && ssh pi4 'sudo rm -rf /tmp/sg-admin-tmp && mkdir -p /tmp/sg-admin-tmp' && scp -r dist/. pi4:/tmp/sg-admin-tmp/ && scp ../scripts/splitgate-admin.py pi4:/tmp/sg-admin-py.tmp && ssh pi4 'sudo cp -r /tmp/sg-admin-tmp/. /etc/splitgate/admin/ && sudo rm -rf /tmp/sg-admin-tmp && sudo chown -R root:root /etc/splitgate/admin && sudo mv /tmp/sg-admin-py.tmp /usr/local/bin/splitgate-admin && sudo chmod +x /usr/local/bin/splitgate-admin && sudo systemctl restart splitgate-admin.service && echo DONE'"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.18",
