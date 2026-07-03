@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { HashRouter, Routes, Route, NavLink } from 'react-router-dom'
-import { Shield, LayoutDashboard, Server, Route as RouteIcon, FileText, Settings2, LogOut, Menu, X } from 'lucide-react'
+import { Shield, LayoutDashboard, Server, Route as RouteIcon, FileText, Settings2, Cog, LogOut, Menu, X } from 'lucide-react'
 import { setAuth, clearAuth, apiFetch, apiLogout } from './api'
 import { subscribeMeta } from './logStream'
 import { Button } from '@/components/ui/button'
@@ -108,7 +108,7 @@ const NAV = [
   { to: '/routes', icon: RouteIcon, label: 'Routes' },
   { to: '/logs', icon: FileText, label: 'Logs' },
   { to: '/config', icon: Settings2, label: 'Config' },
-  { to: '/settings', icon: Settings2, label: 'Settings' },
+  { to: '/settings', icon: Cog, label: 'Settings' },
 ]
 
 function NavItems({ onNav }) {

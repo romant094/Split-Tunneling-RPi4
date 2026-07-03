@@ -8,6 +8,13 @@
     <meta name="description" content="Admin interface for Splitgate RPi VPN gateway. Manage services, routes, and logs." />
   </head>
   <body>
+    <script>
+      (function(){
+        var t=localStorage.getItem('sg-theme')||'system';
+        var dark=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if(dark)document.documentElement.classList.add('dark');
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

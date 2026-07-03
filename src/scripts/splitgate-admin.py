@@ -12,7 +12,7 @@ from flask import Flask, request, jsonify, send_from_directory, Response, stream
 
 ADMIN_SECRET_PATH = '/etc/splitgate/admin.secret'
 ADMIN_DIST_DIR = '/etc/splitgate/admin'
-ADMIN_PORT = int(os.environ.get('ADMIN_PORT', 80))
+ADMIN_PORT = int(os.environ.get('ADMIN_PORT', 8080))
 VPN_CUSTOM_ROUTES = '/etc/splitgate/vpn-routes-custom.txt'
 ISP_CUSTOM_ROUTES = '/etc/splitgate/isp-routes-custom.txt'
 RU_EXCLUDE_PATH = '/etc/splitgate/ru-list-exclude.txt'
@@ -560,6 +560,63 @@ def api_settings_secrets_put():
         fh.write(content)
     os.chmod(AWG_CONF_PATH, 0o600)
     return jsonify({'ok': True})
+
+@app.route('/api/status/resources')
+@require_auth
+def api_status_resources():
+    def read_stat():
+        with open('/proc/stat') as f:
+            parts = f.readline().split()[1:8]
+        return list(map(int, parts))
+    s1 = read_stat()
+    time.sleep(0.3)
+    s2 = read_stat()
+    idle1, total1 = s1[3], sum(s1)
+    idle2, total2 = s2[3], sum(s2)
+    cpu_pct = round(100.0 * (1 - (idle2 - idle1) / max(total2 - total1, 1)), 1)
+
+    meminfo = {}
+    with open('/proc/meminfo') as f:
+        for line in f:
+            parts = line.split()
+            if len(parts) >= 2:
+                meminfo[parts[0].rstrip(':')] = int(parts[1])
+    mem_total = meminfo.get('MemTotal', 0) * 1024
+    mem_available = meminfo.get('MemAvailable', 0) * 1024
+    mem_used = mem_total - mem_available
+
+    st = os.statvfs('/')
+    disk_total = st.f_blocks * st.f_frsize
+    disk_used = (st.f_blocks - st.f_bavail) * st.f_frsize
+
+    svcs = []
+    for name in ['awg0', 'splitgate-watch', 'splitgate-admin', 'networking', 'dnsmasq']:
+        try:
+            pid_r = subprocess.run(
+                ['systemctl', 'show', name, '--property=MainPID', '--value'],
+                capture_output=True, text=True, timeout=3)
+            pid = int(pid_r.stdout.strip() or '0')
+            if pid > 0:
+                ps_r = subprocess.run(
+                    ['ps', '-p', str(pid), '-o', '%cpu,rss', '--no-headers'],
+                    capture_output=True, text=True, timeout=3)
+                cols = ps_r.stdout.strip().split()
+                svc_cpu = float(cols[0]) if cols else 0.0
+                svc_mem = int(cols[1]) * 1024 if len(cols) > 1 else 0
+            else:
+                svc_cpu, svc_mem = 0.0, 0
+        except Exception:
+            svc_cpu, svc_mem = 0.0, 0
+        svcs.append({'name': name, 'cpu': svc_cpu, 'mem': svc_mem})
+
+    return jsonify({
+        'cpu_percent': cpu_pct,
+        'mem_total': mem_total,
+        'mem_used': mem_used,
+        'disk_total': disk_total,
+        'disk_used': disk_used,
+        'services': svcs,
+    })
 
 @app.route('/api/settings/restart-admin', methods=['POST'])
 @require_auth

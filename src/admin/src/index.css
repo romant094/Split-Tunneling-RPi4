@@ -1,25 +1,71 @@
 @import "tailwindcss";
 
+/* Light theme (default) */
+:root {
+  --bg: hsl(0 0% 98%);
+  --fg: hsl(0 0% 9%);
+  --card-bg: hsl(0 0% 100%);
+  --card-fg: hsl(0 0% 9%);
+  --popover-bg: hsl(0 0% 100%);
+  --popover-fg: hsl(0 0% 9%);
+  --primary-h: hsl(122 39% 42%);
+  --primary-fg: hsl(0 0% 100%);
+  --secondary-bg: hsl(0 0% 93%);
+  --secondary-fg: hsl(0 0% 9%);
+  --muted-bg: hsl(0 0% 93%);
+  --muted-fg: hsl(0 0% 40%);
+  --accent-bg: hsl(0 0% 93%);
+  --accent-fg: hsl(0 0% 9%);
+  --destructive-h: hsl(0 72% 51%);
+  --destructive-fg: hsl(0 0% 100%);
+  --border-h: hsl(0 0% 82%);
+  --input-h: hsl(0 0% 82%);
+  --ring-h: hsl(122 39% 42%);
+}
+
+/* Dark theme */
+.dark {
+  --bg: hsl(0 0% 7%);
+  --fg: hsl(0 0% 88%);
+  --card-bg: hsl(0 0% 10%);
+  --card-fg: hsl(0 0% 88%);
+  --popover-bg: hsl(0 0% 10%);
+  --popover-fg: hsl(0 0% 88%);
+  --primary-h: hsl(122 39% 49%);
+  --primary-fg: hsl(0 0% 0%);
+  --secondary-bg: hsl(0 0% 15%);
+  --secondary-fg: hsl(0 0% 88%);
+  --muted-bg: hsl(0 0% 15%);
+  --muted-fg: hsl(0 0% 55%);
+  --accent-bg: hsl(0 0% 15%);
+  --accent-fg: hsl(0 0% 88%);
+  --destructive-h: hsl(0 72% 51%);
+  --destructive-fg: hsl(0 0% 100%);
+  --border-h: hsl(0 0% 18%);
+  --input-h: hsl(0 0% 18%);
+  --ring-h: hsl(122 39% 49%);
+}
+
 @theme {
-  --color-background: hsl(0 0% 7%);
-  --color-foreground: hsl(0 0% 88%);
-  --color-card: hsl(0 0% 10%);
-  --color-card-foreground: hsl(0 0% 88%);
-  --color-popover: hsl(0 0% 10%);
-  --color-popover-foreground: hsl(0 0% 88%);
-  --color-primary: hsl(122 39% 49%);
-  --color-primary-foreground: hsl(0 0% 0%);
-  --color-secondary: hsl(0 0% 15%);
-  --color-secondary-foreground: hsl(0 0% 88%);
-  --color-muted: hsl(0 0% 15%);
-  --color-muted-foreground: hsl(0 0% 55%);
-  --color-accent: hsl(0 0% 15%);
-  --color-accent-foreground: hsl(0 0% 88%);
-  --color-destructive: hsl(0 72% 51%);
-  --color-destructive-foreground: hsl(0 0% 100%);
-  --color-border: hsl(0 0% 18%);
-  --color-input: hsl(0 0% 18%);
-  --color-ring: hsl(122 39% 49%);
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-card: var(--card-bg);
+  --color-card-foreground: var(--card-fg);
+  --color-popover: var(--popover-bg);
+  --color-popover-foreground: var(--popover-fg);
+  --color-primary: var(--primary-h);
+  --color-primary-foreground: var(--primary-fg);
+  --color-secondary: var(--secondary-bg);
+  --color-secondary-foreground: var(--secondary-fg);
+  --color-muted: var(--muted-bg);
+  --color-muted-foreground: var(--muted-fg);
+  --color-accent: var(--accent-bg);
+  --color-accent-foreground: var(--accent-fg);
+  --color-destructive: var(--destructive-h);
+  --color-destructive-foreground: var(--destructive-fg);
+  --color-border: var(--border-h);
+  --color-input: var(--input-h);
+  --color-ring: var(--ring-h);
   --radius: 0.375rem;
 }
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { Eye, EyeOff, Upload } from 'lucide-react'
+import { Eye, EyeOff, Upload, RefreshCw, Sun, Moon, Monitor } from 'lucide-react'
 import { apiFetch } from '../api'
+import { useTheme } from '../hooks/useTheme'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,8 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Separator } from '@/components/ui/separator'
 
-// Only these env vars are surfaced in the UI
 const ENV_CONFIG = [
+  { key: 'ADMIN_PORT', label: 'Admin port', hint: 'Port the web interface listens on. Requires admin service restart to take effect.' },
   { key: 'RU_SUBNET_URL', label: 'Route list URL', hint: 'URL to fetch Russian IP ranges from (used by the daily update cron).' },
   { key: 'UPDATE_INTERVAL', label: 'Route update interval', hint: 'How often the RU IP list is refreshed (cron expression or interval).' },
 ]
@@ -20,16 +21,23 @@ function EnvVars() {
   const [vars, setVars] = useState({})
   const [edited, setEdited] = useState({})
   const [msg, setMsg] = useState('')
+  const [portChanged, setPortChanged] = useState(false)
+  const [restarting, setRestarting] = useState(false)
+  const [countdown, setCountdown] = useState(null)
+  const [newPort, setNewPort] = useState(null)
+  const timerRef = useRef(null)
 
   useEffect(() => {
     apiFetch('/api/settings/env').then(r => r.json()).then(d => {
       setVars(d.vars || {})
       setEdited({})
+      setPortChanged(false)
     }).catch(() => {})
   }, [])
 
   function handleChange(k, v) {
     setEdited(e => ({ ...e, [k]: v }))
+    if (k === 'ADMIN_PORT') setPortChanged(true)
   }
 
   async function save() {
@@ -42,6 +50,26 @@ function EnvVars() {
       setEdited({})
     }
   }
+
+  async function restartAdmin() {
+    const port = edited['ADMIN_PORT'] ?? vars['ADMIN_PORT'] ?? '8080'
+    setNewPort(port)
+    setRestarting(true)
+    setMsg('')
+    await apiFetch('/api/settings/restart-admin', { method: 'POST' })
+    let n = 5
+    setCountdown(n)
+    timerRef.current = setInterval(() => {
+      n -= 1
+      setCountdown(n)
+      if (n <= 0) {
+        clearInterval(timerRef.current)
+        window.location.href = `http://${window.location.hostname}:${port}`
+      }
+    }, 1000)
+  }
+
+  useEffect(() => () => clearInterval(timerRef.current), [])
 
   const visibleKeys = ENV_CONFIG.filter(c => c.key in vars)
 
@@ -73,8 +101,21 @@ function EnvVars() {
           )
         })}
         <div className="flex items-center gap-3 flex-wrap pt-1">
-          <Button size="sm" onClick={save}>Save</Button>
-          {msg && <span className={`text-sm ${msg.startsWith('✓') ? 'text-primary' : 'text-destructive'}`}>{msg}</span>}
+          <Button size="sm" onClick={save} disabled={restarting}>Save</Button>
+          {portChanged && !restarting && (
+            <Button size="sm" variant="outline" onClick={restartAdmin}>
+              <RefreshCw className="h-3.5 w-3.5 mr-1" />
+              Restart Admin
+            </Button>
+          )}
+          {countdown !== null && (
+            <span className="text-sm text-primary">
+              Redirecting to :{newPort} in {countdown}…
+            </span>
+          )}
+          {msg && !restarting && (
+            <span className={`text-sm ${msg.startsWith('✓') ? 'text-primary' : 'text-destructive'}`}>{msg}</span>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -88,6 +129,9 @@ function AwgConfig() {
   const [uploadText, setUploadText] = useState('')
   const [uploadMsg, setUploadMsg] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [uploadDone, setUploadDone] = useState(false)
+  const [restarting, setRestarting] = useState(false)
+  const [restartMsg, setRestartMsg] = useState('')
   const fileRef = useRef(null)
 
   function loadConfig() {
@@ -108,7 +152,7 @@ function AwgConfig() {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = ev => setUploadText(ev.target.result || '')
+    reader.onload = ev => { setUploadText(ev.target.result || ''); setUploadDone(false); setRestartMsg('') }
     reader.readAsText(file)
   }
 
@@ -118,9 +162,24 @@ function AwgConfig() {
     setUploadMsg('')
     const r = await apiFetch('/api/settings/awg-config', { method: 'PUT', body: JSON.stringify({ content: uploadText }) })
     const d = await r.json()
-    setUploadMsg(r.ok ? '✓ Config uploaded' : `✗ ${d.error}`)
+    if (r.ok) {
+      setUploadMsg('✓ Config uploaded')
+      setUploadDone(true)
+      setUploadText('')
+      loadConfig()
+    } else {
+      setUploadMsg(`✗ ${d.error}`)
+    }
     setUploading(false)
-    if (r.ok) { setUploadText(''); loadConfig() }
+  }
+
+  async function restartAwg() {
+    setRestarting(true)
+    setRestartMsg('')
+    const r = await apiFetch('/api/services/awg0/restart', { method: 'POST' })
+    setRestartMsg(r.ok ? '✓ awg0 restarted' : '✗ Restart failed')
+    setRestarting(false)
+    setUploadDone(false)
   }
 
   return (
@@ -140,7 +199,10 @@ function AwgConfig() {
         </CardHeader>
         <CardContent className="space-y-3">
           <div>
-            <p className="text-sm text-muted-foreground mb-3">Upload a complete <code className="font-mono text-xs">awg0.conf</code> to replace the current configuration.</p>
+            <p className="text-sm text-muted-foreground mb-3">
+              Upload a complete <code className="font-mono text-xs">awg0.conf</code> to replace the current configuration.
+              After uploading, restart the <code className="font-mono text-xs">awg0</code> service below.
+            </p>
             <div className="flex flex-wrap items-center gap-2">
               <input type="file" ref={fileRef} accept=".conf,text/plain" onChange={handleFileSelect} className="hidden" />
               <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
@@ -161,7 +223,16 @@ function AwgConfig() {
               </div>
             )}
           </div>
-          <p className="text-xs text-muted-foreground">After uploading, restart the <code className="font-mono">awg0</code> service on the Services page.</p>
+          {uploadDone && (
+            <div className="flex items-center gap-3 pt-1 border-t border-border">
+              <p className="text-sm text-amber-500 flex-1">Config updated — restart awg0 to apply.</p>
+              <Button size="sm" variant="outline" onClick={restartAwg} disabled={restarting}>
+                <RefreshCw className={`h-3.5 w-3.5 mr-1 ${restarting ? 'animate-spin' : ''}`} />
+                {restarting ? 'Restarting…' : 'Restart awg0'}
+              </Button>
+              {restartMsg && <span className={`text-sm ${restartMsg.startsWith('✓') ? 'text-primary' : 'text-destructive'}`}>{restartMsg}</span>}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -188,7 +259,7 @@ function AwgConfig() {
                           <TableCell className="font-mono text-muted-foreground py-1.5 break-all">{displayVal}</TableCell>
                           {masked && (
                             <TableCell className="py-1.5 w-8">
-                              <button onClick={() => toggleReveal(section.name, key)} className="text-muted-foreground hover:text-foreground">
+                              <button onClick={() => toggleReveal(section.name, key)} className="text-muted-foreground hover:text-foreground cursor-pointer">
                                 {isRevealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                               </button>
                             </TableCell>
@@ -207,6 +278,40 @@ function AwgConfig() {
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+function ThemeSelector() {
+  const { theme, setTheme } = useTheme()
+  const opts = [
+    { value: 'system', icon: Monitor, label: 'System' },
+    { value: 'light', icon: Sun, label: 'Light' },
+    { value: 'dark', icon: Moon, label: 'Dark' },
+  ]
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Appearance</CardTitle>
+        <CardDescription>Choose the color theme for the admin interface.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex gap-2 flex-wrap">
+          {opts.map(({ value, icon: Icon, label }) => (
+            <button
+              key={value}
+              onClick={() => setTheme(value)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-md border text-sm transition-colors cursor-pointer
+                ${theme === value
+                  ? 'border-primary bg-primary/10 text-primary font-medium'
+                  : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30'}`}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -310,6 +415,7 @@ export default function Settings() {
           Runtime configuration, VPN keys, admin password, and system rollback.
         </p>
       </div>
+      <ThemeSelector />
       <EnvVars />
       <AwgConfig />
       <Separator />

@@ -295,7 +295,7 @@ export default function Logs() {
             <>
               <FilterBar filters={filters} onChange={setFilters} />
               <p className="text-xs text-muted-foreground">{visibleHist.length} / {histLines.length} lines shown</p>
-              <LogBox lines={visibleHist} colorize={false} />
+              <LogBox lines={visibleHist} colorize={true} />
             </>
           )}
           {histLines.length === 0 && !histLoading && (

@@ -5,10 +5,16 @@
   line-height: 1.6;
   overflow-y: auto;
   height: 500px;
-  background: hsl(0 0% 5%);
-  border: 1px solid hsl(0 0% 18%);
+  background: var(--log-bg, hsl(0 0% 5%));
+  border: 1px solid var(--border-h);
   border-radius: 6px;
   padding: 12px;
 }
-.log-line-vpn { color: #00ffff; }
-.log-line-isp { color: #ffff00; }
+:root { --log-bg: hsl(0 0% 96%); }
+.dark { --log-bg: hsl(0 0% 5%); }
+
+.log-line-vpn { color: hsl(180 100% 40%); }
+.log-line-isp  { color: hsl(45 100% 40%); }
+
+.dark .log-line-vpn { color: #00ffff; }
+.dark .log-line-isp  { color: #ffff00; }

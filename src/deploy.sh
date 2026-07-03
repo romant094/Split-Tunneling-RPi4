@@ -519,7 +519,7 @@ if [ -d "${ADMIN_DIST_LOCAL}" ]; then
   # 29d: Create admin.secret if not present, reload systemd, enable service
   ssh -o BatchMode=yes "${SSH_HOST}" "[ -f ${ADMIN_SECRET_REMOTE} ] || (sudo sh -c 'printf admin > ${ADMIN_SECRET_REMOTE}' && sudo chmod 600 ${ADMIN_SECRET_REMOTE} && sudo chown root:root ${ADMIN_SECRET_REMOTE} && echo '       Created default admin.secret with password: admin — CHANGE THIS')"
   ssh -o BatchMode=yes "${SSH_HOST}" "sudo systemctl daemon-reload && sudo systemctl enable --now splitgate-admin.service"
-  echo "       splitgate-admin.service enabled and started (accessible at http://splitgate.lan)"
+  echo "       splitgate-admin.service enabled and started (accessible at http://192.168.1.254:${ADMIN_PORT:-8080})"
   echo "       Default password: admin — change via Settings page or: echo NEWPASS | sudo tee ${ADMIN_SECRET_REMOTE}"
 else
   echo "[29/${TOTAL_STAGES}] Admin UI not built — skipping admin stages (${ADMIN_DIST_LOCAL}/ missing)"
