@@ -9,9 +9,11 @@ export default function Config() {
   const [saveMsg, setSaveMsg] = useState('')
   const [updateMsg, setUpdateMsg] = useState('')
   const [updating, setUpdating] = useState(false)
+  const [ruUpdated, setRuUpdated] = useState(null)
 
   useEffect(() => {
     apiFetch('/api/config/exclude').then(r => r.json()).then(d => setContent(d.content || '')).catch(() => {})
+    apiFetch('/api/status').then(r => r.json()).then(d => setRuUpdated(d.ru_list_updated || null)).catch(() => {})
   }, [])
 
   async function save() {
@@ -25,6 +27,9 @@ export default function Config() {
     const r = await apiFetch('/api/config/update', { method: 'POST' })
     const d = await r.json()
     setUpdateMsg(r.ok ? '✓ Done' : `✗ ${d.error}`)
+    if (r.ok) {
+      apiFetch('/api/status').then(r2 => r2.json()).then(s => setRuUpdated(s.ru_list_updated || null)).catch(() => {})
+    }
     setUpdating(false)
   }
 
@@ -68,6 +73,9 @@ export default function Config() {
             <CardDescription>
               Fetch a fresh copy of Russian IP ranges from the upstream source configured in <code className="font-mono text-xs">RU_SUBNET_URL</code>.
               Runs the same script as the daily cron job.
+              {ruUpdated && (
+                <span className="block mt-1 font-mono text-xs text-muted-foreground/70">Last updated: {ruUpdated}</span>
+              )}
             </CardDescription>
           </div>
           <div className="flex items-center gap-3 shrink-0">

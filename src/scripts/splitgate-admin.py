@@ -160,16 +160,15 @@ def tail_file(path, n=200):
 @app.route('/api/status')
 @require_auth
 def api_status():
-    # Check all services in one pass
+    return jsonify(_collect_status())
+
+def _collect_status():
     svc_statuses = {}
     for name in MANAGED_SERVICES:
         unit = SERVICE_UNIT_MAP[name]
         r = subprocess.run(['systemctl', 'is-active', unit], capture_output=True, text=True, timeout=5)
         svc_statuses[name] = r.stdout.strip() or 'unknown'
-    tunnel_up = svc_statuses.get('awg0') == 'active'
-    daemon_up = svc_statuses.get('splitgate-watch') == 'active'
     services = [{'name': n, 'status': s} for n, s in svc_statuses.items()]
-
     try:
         mtime = os.path.getmtime('/etc/splitgate/white-list.txt')
         ru_list_updated = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M')
@@ -184,24 +183,53 @@ def api_status():
             ru_route_count = sum(1 for l in fh if l.strip() and not l.startswith('#'))
     except FileNotFoundError:
         ru_route_count = 0
-    return jsonify({
-        'tunnel_up': tunnel_up, 'daemon_up': daemon_up,
+    return {
+        'tunnel_up': svc_statuses.get('awg0') == 'active',
+        'daemon_up': svc_statuses.get('splitgate-watch') == 'active',
         'ru_list_updated': ru_list_updated,
         'vpn_route_count': vpn_route_count, 'vpn_custom_count': vpn_custom_count,
         'isp_route_count': isp_route_count, 'ru_route_count': ru_route_count,
         'services': services,
-    })
+    }
 
-@app.route('/api/services')
-@require_auth
-def api_services():
+def _collect_services():
     result = []
     for name in MANAGED_SERVICES:
         unit = SERVICE_UNIT_MAP[name]
         r = subprocess.run(['systemctl', 'is-active', unit], capture_output=True, text=True, timeout=5)
-        status = r.stdout.strip() if r.stdout.strip() else 'unknown'
-        result.append({'name': name, 'status': status})
-    return jsonify(result)
+        result.append({'name': name, 'status': r.stdout.strip() or 'unknown'})
+    return result
+
+@app.route('/api/status/watch')
+@require_auth
+def api_status_watch():
+    def generate():
+        while True:
+            try:
+                yield f'data: {json.dumps(_collect_status())}\n\n'
+            except Exception as e:
+                yield f'data: {json.dumps({"error": str(e)})}\n\n'
+            time.sleep(10)
+    return Response(stream_with_context(generate()), mimetype='text/event-stream',
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+@app.route('/api/services/watch')
+@require_auth
+def api_services_watch():
+    def generate():
+        while True:
+            try:
+                yield f'data: {json.dumps(_collect_services())}\n\n'
+            except Exception as e:
+                yield f'data: {json.dumps({"error": str(e)})}\n\n'
+            time.sleep(5)
+    return Response(stream_with_context(generate()), mimetype='text/event-stream',
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+@app.route('/api/services')
+@require_auth
+def api_services():
+    return jsonify(_collect_services())
 
 @app.route('/api/services/<name>/<action>', methods=['POST'])
 @require_auth

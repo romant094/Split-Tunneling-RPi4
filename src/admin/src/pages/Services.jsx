@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { apiFetch } from '../api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -43,6 +43,8 @@ export default function Services() {
   const [bulkLoading, setBulkLoading] = useState(null)
   const [msg, setMsg] = useState('')
 
+  const esRef = useRef(null)
+
   function load() {
     apiFetch('/api/services')
       .then(r => r.json())
@@ -51,9 +53,19 @@ export default function Services() {
   }
 
   useEffect(() => {
-    load()
-    const id = setInterval(load, 5000)
-    return () => clearInterval(id)
+    function connect() {
+      const es = new EventSource('/api/services/watch')
+      esRef.current = es
+      es.onmessage = e => {
+        try {
+          const all = JSON.parse(e.data)
+          setServices(all.filter(s => DISPLAY_SERVICES.includes(s.name)))
+        } catch {}
+      }
+      es.onerror = () => { es.close(); setTimeout(connect, 5000) }
+    }
+    connect()
+    return () => { esRef.current?.close() }
   }, [])
 
   async function action(name, act) {

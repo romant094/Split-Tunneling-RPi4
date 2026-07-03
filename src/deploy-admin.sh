@@ -23,8 +23,18 @@ echo "[3/4] Uploading splitgate-admin.py to ${SSH_HOST}:${ADMIN_PY_REMOTE}..."
 scp -o BatchMode=yes scripts/splitgate-admin.py "${SSH_HOST}:/tmp/sg-admin-py.tmp"
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv /tmp/sg-admin-py.tmp ${ADMIN_PY_REMOTE} && sudo chmod +x ${ADMIN_PY_REMOTE} && sudo chown root:root ${ADMIN_PY_REMOTE}"
 
-echo "[4/4] Restarting splitgate-admin.service..."
-ssh -o BatchMode=yes "${SSH_HOST}" "sudo systemctl restart splitgate-admin.service"
+echo "[4/4] Syncing ru-exclude list..."
+for EXCL_LOCAL in configs/ru-list-exclude.txt configs/ru-exclude.txt; do
+  if [ -f "${EXCL_LOCAL}" ]; then
+    scp -o BatchMode=yes "${EXCL_LOCAL}" "${SSH_HOST}:/tmp/ru-excl.tmp"
+    ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv /tmp/ru-excl.tmp /etc/splitgate/ru-list-exclude.txt && sudo chmod 644 /etc/splitgate/ru-list-exclude.txt"
+    echo "       Deployed ${EXCL_LOCAL} → /etc/splitgate/ru-list-exclude.txt"
+    break
+  fi
+done
+
+echo "[5/5] Restarting splitgate-admin.service..."
+ssh -o BatchMode=yes "${SSH_HOST}" "sudo systemctl restart splitgate-admin"
 
 echo ""
 echo "Admin deployed → http://192.168.1.254:8080"

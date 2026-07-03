@@ -12,7 +12,7 @@ import { AlertCircle } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import Services from './pages/Services'
 import RoutesPage from './pages/Routes'
-import Logs from './pages/Logs'
+import LogsLayout, { LogsLive, LogsHistory, LogsInstall, LogsErrors, LogsJournal } from './pages/Logs'
 import Config from './pages/Config'
 import Settings from './pages/Settings'
 import './App.css'
@@ -195,7 +195,14 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/services" element={<Services />} />
             <Route path="/routes" element={<RoutesPage />} />
-            <Route path="/logs" element={<Logs />} />
+            <Route path="/logs" element={<LogsLayout />}>
+              <Route index element={<LogsLive />} />
+              <Route path="live" element={<LogsLive />} />
+              <Route path="history" element={<LogsHistory />} />
+              <Route path="install" element={<LogsInstall />} />
+              <Route path="errors" element={<LogsErrors />} />
+              <Route path="journal" element={<LogsJournal />} />
+            </Route>
             <Route path="/config" element={<Config />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
