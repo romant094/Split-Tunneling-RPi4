@@ -23,7 +23,7 @@ export function getAuthHeader() {
 }
 
 export async function apiFetch(path, options = {}) {
-  return fetch(path, {
+  const resp = await fetch(path, {
     ...options,
     credentials: 'include',
     headers: {
@@ -32,6 +32,11 @@ export async function apiFetch(path, options = {}) {
       ...(options.headers || {}),
     },
   });
+  if (resp.status === 401) {
+    clearAuth();
+    window.location.reload();
+  }
+  return resp;
 }
 
 export async function apiLogout() {

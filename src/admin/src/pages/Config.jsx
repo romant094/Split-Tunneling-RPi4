@@ -24,35 +24,59 @@ export default function Config() {
     setUpdateMsg('Updating…')
     const r = await apiFetch('/api/config/update', { method: 'POST' })
     const d = await r.json()
-    setUpdateMsg(r.ok ? `✓ Done` : `✗ ${d.error}`)
+    setUpdateMsg(r.ok ? '✓ Done' : `✗ ${d.error}`)
     setUpdating(false)
   }
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Config</h1>
+      <div>
+        <h1 className="text-2xl font-semibold">Config</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          Manage the RU IP exclusion list and trigger upstream route updates.
+        </p>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">RU Exclude List</CardTitle>
-          <CardDescription>ru-list-exclude.txt — one CIDR per line to exclude from RU routes</CardDescription>
+          <CardDescription>
+            <code className="font-mono text-xs">ru-list-exclude.txt</code> — one CIDR per line.
+            These ranges are excluded from the auto-downloaded Russian IP list, meaning they route via VPN instead of ISP.
+            Useful for non-Russian services that share IP space with Russian ranges.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Textarea rows={12} value={content} onChange={e => setContent(e.target.value)} />
+          <Textarea
+            rows={12}
+            value={content}
+            onChange={e => setContent(e.target.value)}
+            placeholder="No exclusions configured. Add one CIDR per line, e.g.:&#10;185.199.108.0/22"
+            className="font-mono text-xs"
+          />
           <div className="flex items-center gap-3">
             <Button size="sm" onClick={save}>Save</Button>
             {saveMsg && <span className={`text-sm ${saveMsg.startsWith('✓') ? 'text-primary' : 'text-destructive'}`}>{saveMsg}</span>}
           </div>
         </CardContent>
       </Card>
+
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">RU IP List</CardTitle>
-          <CardDescription>Fetch fresh RU IP ranges from upstream source</CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+          <div>
+            <CardTitle className="text-base">RU IP List</CardTitle>
+            <CardDescription>
+              Fetch a fresh copy of Russian IP ranges from the upstream source configured in <code className="font-mono text-xs">RU_SUBNET_URL</code>.
+              Runs the same script as the daily cron job.
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            {updateMsg && <span className={`text-sm ${updateMsg.startsWith('✗') ? 'text-destructive' : 'text-primary'}`}>{updateMsg}</span>}
+            <Button size="sm" variant="outline" onClick={refreshRUList} disabled={updating}>
+              {updating ? 'Updating…' : 'Refresh RU List'}
+            </Button>
+          </div>
         </CardHeader>
-        <CardContent className="flex items-center gap-3">
-          <Button size="sm" variant="outline" onClick={refreshRUList} disabled={updating}>Refresh RU List</Button>
-          {updateMsg && <span className={`text-sm ${updateMsg.startsWith('✗') ? 'text-destructive' : 'text-primary'}`}>{updateMsg}</span>}
-        </CardContent>
       </Card>
     </div>
   )

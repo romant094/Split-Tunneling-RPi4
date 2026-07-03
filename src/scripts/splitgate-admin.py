@@ -6,7 +6,7 @@ Decisions: D-08 single-file Flask, D-09 Basic Auth via /etc/splitgate/admin.secr
 """
 
 import os, re, hmac, time, json, secrets, subprocess, functools, threading
-from datetime import date
+from datetime import date, datetime
 from collections import deque
 from flask import Flask, request, jsonify, send_from_directory, Response, stream_with_context, make_response
 
@@ -40,24 +40,19 @@ _sessions = set()  # in-memory session tokens; resets on service restart
 def require_auth(f):
     @functools.wraps(f)
     def decorated(*args, **kwargs):
-        # 1. Check cookie first
         cookie_token = request.cookies.get('sg_session')
         if cookie_token and cookie_token in _sessions:
             return f(*args, **kwargs)
-        # 2. Read stored password
         try:
             with open(ADMIN_SECRET_PATH) as fh:
                 stored_pw = fh.read().strip()
         except FileNotFoundError:
             return Response('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="splitgate"'})
-        # 3. Check for Basic Auth header
         auth = request.authorization
         if not auth:
             return Response('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="splitgate"'})
-        # 4. Constant-time comparison
         if not secrets.compare_digest(auth.password.encode(), stored_pw.encode()):
             return Response('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="splitgate"'})
-        # 5. Issue session cookie
         session_token = secrets.token_hex(16)
         _sessions.add(session_token)
         inner_result = f(*args, **kwargs)
@@ -67,17 +62,67 @@ def require_auth(f):
     return decorated
 
 
+def strip_env_quotes(v):
+    v = v.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in ('"', "'"):
+        return v[1:-1]
+    return v
+
 def read_routes_file(path):
+    """Return list of CIDRs only (handles both inline and leading-comment formats)."""
+    result = []
     try:
         with open(path) as fh:
-            return [line.strip() for line in fh if line.strip() and not line.startswith('#')]
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                if '#' in line:
+                    line = line.split('#', 1)[0].strip()
+                if line:
+                    result.append(line)
     except FileNotFoundError:
-        return []
+        pass
+    return result
 
-def write_routes_file(path, entries):
+def read_routes_with_desc(path):
+    """Return list of {cidr, description} dicts. Handles inline and leading-comment formats."""
+    result = []
+    pending_comment = ''
+    try:
+        with open(path) as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    pending_comment = ''
+                    continue
+                if line.startswith('#'):
+                    comment = line.lstrip('#').strip()
+                    pending_comment = (pending_comment + ' ' + comment).strip() if pending_comment else comment
+                    continue
+                if '#' in line:
+                    cidr_part, desc_part = line.split('#', 1)
+                    cidr = cidr_part.strip()
+                    desc = desc_part.strip() or pending_comment
+                else:
+                    cidr = line
+                    desc = pending_comment
+                if CIDR_RE.match(cidr):
+                    result.append({'cidr': cidr, 'description': desc})
+                pending_comment = ''
+    except FileNotFoundError:
+        pass
+    return result
+
+def write_routes_with_desc(path, entries):
+    """Write routes in inline format: cidr # description (or just cidr if no description)."""
     with open(path, 'w') as fh:
-        for entry in entries:
-            fh.write(entry + '\n')
+        for e in entries:
+            desc = e.get('description', '').strip()
+            if desc:
+                fh.write(f"{e['cidr']} # {desc}\n")
+            else:
+                fh.write(f"{e['cidr']}\n")
 
 def parse_env_file(path):
     result = {}
@@ -89,7 +134,7 @@ def parse_env_file(path):
                     continue
                 if '=' in line:
                     k, v = line.split('=', 1)
-                    result[k] = v
+                    result[k.strip()] = strip_env_quotes(v)
     except FileNotFoundError:
         pass
     return result
@@ -107,7 +152,7 @@ def mask_value(key, value):
 def tail_file(path, n=200):
     try:
         with open(path) as fh:
-            return [line.strip() for line in deque(fh, maxlen=n)]
+            return [line.rstrip() for line in deque(fh, maxlen=n)]
     except FileNotFoundError:
         return []
 
@@ -159,24 +204,45 @@ def api_service_action(name, action):
         return jsonify({'ok': True})
     return jsonify({'error': r.stderr.strip()}), 500
 
+# ── Routes: VPN ──────────────────────────────────────────────────────────────
+
 @app.route('/api/routes/vpn')
 @require_auth
 def api_routes_vpn_get():
-    return jsonify({'routes': read_routes_file(VPN_CUSTOM_ROUTES)})
+    return jsonify({'routes': read_routes_with_desc(VPN_CUSTOM_ROUTES)})
 
 @app.route('/api/routes/vpn', methods=['POST'])
 @require_auth
 def api_routes_vpn_post():
     body = request.get_json(silent=True) or {}
     cidr = body.get('cidr', '').strip()
+    description = body.get('description', '').strip()
     if not CIDR_RE.match(cidr):
         return jsonify({'error': 'Invalid CIDR'}), 400
-    routes = read_routes_file(VPN_CUSTOM_ROUTES)
-    if cidr in routes:
+    entries = read_routes_with_desc(VPN_CUSTOM_ROUTES)
+    if any(e['cidr'] == cidr for e in entries):
         return jsonify({'error': 'Already exists'}), 409
-    routes.append(cidr)
-    write_routes_file(VPN_CUSTOM_ROUTES, routes)
+    entries.append({'cidr': cidr, 'description': description})
+    write_routes_with_desc(VPN_CUSTOM_ROUTES, entries)
     return jsonify({'ok': True}), 201
+
+@app.route('/api/routes/vpn', methods=['PUT'])
+@require_auth
+def api_routes_vpn_put():
+    body = request.get_json(silent=True) or {}
+    old_cidr = body.get('old_cidr', '').strip()
+    new_cidr = body.get('cidr', '').strip()
+    description = body.get('description', '').strip()
+    if not CIDR_RE.match(old_cidr) or not CIDR_RE.match(new_cidr):
+        return jsonify({'error': 'Invalid CIDR'}), 400
+    entries = read_routes_with_desc(VPN_CUSTOM_ROUTES)
+    if not any(e['cidr'] == old_cidr for e in entries):
+        return jsonify({'error': 'Route not found'}), 404
+    if new_cidr != old_cidr and any(e['cidr'] == new_cidr for e in entries):
+        return jsonify({'error': 'Already exists'}), 409
+    entries = [{'cidr': new_cidr, 'description': description} if e['cidr'] == old_cidr else e for e in entries]
+    write_routes_with_desc(VPN_CUSTOM_ROUTES, entries)
+    return jsonify({'ok': True})
 
 @app.route('/api/routes/vpn', methods=['DELETE'])
 @require_auth
@@ -185,28 +251,69 @@ def api_routes_vpn_delete():
     cidr = body.get('cidr', '').strip()
     if not CIDR_RE.match(cidr):
         return jsonify({'error': 'Invalid CIDR'}), 400
-    routes = read_routes_file(VPN_CUSTOM_ROUTES)
-    write_routes_file(VPN_CUSTOM_ROUTES, [r for r in routes if r != cidr])
+    entries = read_routes_with_desc(VPN_CUSTOM_ROUTES)
+    write_routes_with_desc(VPN_CUSTOM_ROUTES, [e for e in entries if e['cidr'] != cidr])
     return jsonify({'ok': True})
+
+@app.route('/api/routes/vpn/bulk', methods=['POST'])
+@require_auth
+def api_routes_vpn_bulk():
+    body = request.get_json(silent=True) or {}
+    new_entries = body.get('entries', [])
+    if not isinstance(new_entries, list):
+        return jsonify({'error': 'entries must be a list'}), 400
+    existing = read_routes_with_desc(VPN_CUSTOM_ROUTES)
+    existing_cidrs = {e['cidr'] for e in existing}
+    added = 0
+    for entry in new_entries:
+        cidr = entry.get('cidr', '').strip()
+        if not CIDR_RE.match(cidr) or cidr in existing_cidrs:
+            continue
+        existing.append({'cidr': cidr, 'description': entry.get('description', '').strip()})
+        existing_cidrs.add(cidr)
+        added += 1
+    write_routes_with_desc(VPN_CUSTOM_ROUTES, existing)
+    return jsonify({'ok': True, 'added': added})
+
+# ── Routes: ISP ──────────────────────────────────────────────────────────────
 
 @app.route('/api/routes/isp')
 @require_auth
 def api_routes_isp_get():
-    return jsonify({'routes': read_routes_file(ISP_CUSTOM_ROUTES)})
+    return jsonify({'routes': read_routes_with_desc(ISP_CUSTOM_ROUTES)})
 
 @app.route('/api/routes/isp', methods=['POST'])
 @require_auth
 def api_routes_isp_post():
     body = request.get_json(silent=True) or {}
     cidr = body.get('cidr', '').strip()
+    description = body.get('description', '').strip()
     if not CIDR_RE.match(cidr):
         return jsonify({'error': 'Invalid CIDR'}), 400
-    routes = read_routes_file(ISP_CUSTOM_ROUTES)
-    if cidr in routes:
+    entries = read_routes_with_desc(ISP_CUSTOM_ROUTES)
+    if any(e['cidr'] == cidr for e in entries):
         return jsonify({'error': 'Already exists'}), 409
-    routes.append(cidr)
-    write_routes_file(ISP_CUSTOM_ROUTES, routes)
+    entries.append({'cidr': cidr, 'description': description})
+    write_routes_with_desc(ISP_CUSTOM_ROUTES, entries)
     return jsonify({'ok': True}), 201
+
+@app.route('/api/routes/isp', methods=['PUT'])
+@require_auth
+def api_routes_isp_put():
+    body = request.get_json(silent=True) or {}
+    old_cidr = body.get('old_cidr', '').strip()
+    new_cidr = body.get('cidr', '').strip()
+    description = body.get('description', '').strip()
+    if not CIDR_RE.match(old_cidr) or not CIDR_RE.match(new_cidr):
+        return jsonify({'error': 'Invalid CIDR'}), 400
+    entries = read_routes_with_desc(ISP_CUSTOM_ROUTES)
+    if not any(e['cidr'] == old_cidr for e in entries):
+        return jsonify({'error': 'Route not found'}), 404
+    if new_cidr != old_cidr and any(e['cidr'] == new_cidr for e in entries):
+        return jsonify({'error': 'Already exists'}), 409
+    entries = [{'cidr': new_cidr, 'description': description} if e['cidr'] == old_cidr else e for e in entries]
+    write_routes_with_desc(ISP_CUSTOM_ROUTES, entries)
+    return jsonify({'ok': True})
 
 @app.route('/api/routes/isp', methods=['DELETE'])
 @require_auth
@@ -215,9 +322,31 @@ def api_routes_isp_delete():
     cidr = body.get('cidr', '').strip()
     if not CIDR_RE.match(cidr):
         return jsonify({'error': 'Invalid CIDR'}), 400
-    routes = read_routes_file(ISP_CUSTOM_ROUTES)
-    write_routes_file(ISP_CUSTOM_ROUTES, [r for r in routes if r != cidr])
+    entries = read_routes_with_desc(ISP_CUSTOM_ROUTES)
+    write_routes_with_desc(ISP_CUSTOM_ROUTES, [e for e in entries if e['cidr'] != cidr])
     return jsonify({'ok': True})
+
+@app.route('/api/routes/isp/bulk', methods=['POST'])
+@require_auth
+def api_routes_isp_bulk():
+    body = request.get_json(silent=True) or {}
+    new_entries = body.get('entries', [])
+    if not isinstance(new_entries, list):
+        return jsonify({'error': 'entries must be a list'}), 400
+    existing = read_routes_with_desc(ISP_CUSTOM_ROUTES)
+    existing_cidrs = {e['cidr'] for e in existing}
+    added = 0
+    for entry in new_entries:
+        cidr = entry.get('cidr', '').strip()
+        if not CIDR_RE.match(cidr) or cidr in existing_cidrs:
+            continue
+        existing.append({'cidr': cidr, 'description': entry.get('description', '').strip()})
+        existing_cidrs.add(cidr)
+        added += 1
+    write_routes_with_desc(ISP_CUSTOM_ROUTES, existing)
+    return jsonify({'ok': True, 'added': added})
+
+# ── Config: apply / exclude / update ─────────────────────────────────────────
 
 @app.route('/api/config/apply', methods=['POST'])
 @require_auth
@@ -226,49 +355,6 @@ def api_config_apply():
     if r.returncode == 0:
         return jsonify({'ok': True})
     return jsonify({'error': r.stderr.strip()}), 500
-
-@app.route('/api/logs/watch')
-@require_auth
-def api_logs_watch():
-    def generate():
-        current_date = date.today()
-        while True:
-            log_path = f"{LOG_DIR}/watch-{current_date.strftime('%Y-%m-%d')}.log"
-            try:
-                with open(log_path, 'r') as fh:
-                    fh.seek(0, 2)
-                    while True:
-                        today = date.today()
-                        if today != current_date:
-                            current_date = today
-                            break
-                        line = fh.readline()
-                        if line:
-                            yield f"data: {line.rstrip()}\n\n"
-                        else:
-                            time.sleep(0.1)
-            except FileNotFoundError:
-                yield f"data: [waiting for {log_path}]\n\n"
-                time.sleep(2)
-    return Response(stream_with_context(generate()), content_type='text/event-stream',
-                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
-
-@app.route('/api/logs/install')
-@require_auth
-def api_logs_install():
-    return jsonify({'lines': tail_file(f'{LOG_DIR}/install.log', n=500)})
-
-@app.route('/api/logs/watch-errors')
-@require_auth
-def api_logs_watch_errors():
-    return jsonify({'lines': tail_file(f'{LOG_DIR}/watch-error.log', n=200)})
-
-@app.route('/api/logs/journal')
-@require_auth
-def api_logs_journal():
-    r = subprocess.run(['journalctl', '-u', 'splitgate-watch', '-u', 'awg0', '--no-pager', '-n', '200'],
-                       capture_output=True, text=True, timeout=15)
-    return jsonify({'lines': r.stdout.splitlines()})
 
 @app.route('/api/config/exclude')
 @require_auth
@@ -297,6 +383,65 @@ def api_config_update():
         return jsonify({'ok': True, 'output': r.stdout})
     return jsonify({'error': r.stderr.strip()}), 500
 
+# ── Logs ─────────────────────────────────────────────────────────────────────
+
+@app.route('/api/logs/watch')
+@require_auth
+def api_logs_watch():
+    def generate():
+        current_date = date.today()
+        while True:
+            log_path = f"{LOG_DIR}/watch-{current_date.strftime('%Y-%m-%d')}.log"
+            try:
+                with open(log_path, 'r') as fh:
+                    fh.seek(0, 2)
+                    while True:
+                        today = date.today()
+                        if today != current_date:
+                            current_date = today
+                            break
+                        line = fh.readline()
+                        if line:
+                            yield f"data: {line.rstrip()}\n\n"
+                        else:
+                            time.sleep(0.1)
+            except FileNotFoundError:
+                yield f"data: [waiting for {log_path}]\n\n"
+                time.sleep(2)
+    return Response(stream_with_context(generate()), content_type='text/event-stream',
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+@app.route('/api/logs/history')
+@require_auth
+def api_logs_history():
+    date_str = request.args.get('date', '')
+    try:
+        datetime.strptime(date_str, '%Y-%m-%d')
+    except ValueError:
+        return jsonify({'error': 'Invalid date format, use YYYY-MM-DD'}), 400
+    log_path = f'{LOG_DIR}/watch-{date_str}.log'
+    lines = tail_file(log_path, n=5000)
+    return jsonify({'lines': lines, 'date': date_str, 'found': len(lines) > 0})
+
+@app.route('/api/logs/install')
+@require_auth
+def api_logs_install():
+    return jsonify({'lines': tail_file(f'{LOG_DIR}/install.log', n=500)})
+
+@app.route('/api/logs/watch-errors')
+@require_auth
+def api_logs_watch_errors():
+    return jsonify({'lines': tail_file(f'{LOG_DIR}/watch-error.log', n=200)})
+
+@app.route('/api/logs/journal')
+@require_auth
+def api_logs_journal():
+    r = subprocess.run(['journalctl', '-u', 'splitgate-watch', '-u', 'awg0', '--no-pager', '-n', '200'],
+                       capture_output=True, text=True, timeout=15)
+    return jsonify({'lines': r.stdout.splitlines()})
+
+# ── Settings: env / AWG config / password / rollback ─────────────────────────
+
 @app.route('/api/settings/env')
 @require_auth
 def api_settings_env_get():
@@ -314,6 +459,43 @@ def api_settings_env_put():
     current = parse_env_file(ENV_PATH)
     current.update(new_vars)
     write_env_file(ENV_PATH, current)
+    return jsonify({'ok': True})
+
+@app.route('/api/settings/awg-config')
+@require_auth
+def api_settings_awg_config_get():
+    try:
+        with open(AWG_CONF_PATH) as fh:
+            content = fh.read()
+        sections = []
+        current = None
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith('#'):
+                continue
+            if stripped.startswith('[') and stripped.endswith(']'):
+                current = {'name': stripped[1:-1], 'keys': []}
+                sections.append(current)
+            elif '=' in stripped and current is not None:
+                k, v = stripped.split('=', 1)
+                k = k.strip()
+                v = v.strip()
+                masked = bool(SECRET_KEY_RE.search(k))
+                current['keys'].append({'key': k, 'value': '***' if masked else v, 'masked': masked})
+        return jsonify({'sections': sections})
+    except FileNotFoundError:
+        return jsonify({'sections': []})
+
+@app.route('/api/settings/awg-config', methods=['PUT'])
+@require_auth
+def api_settings_awg_config_put():
+    body = request.get_json(silent=True) or {}
+    content = body.get('content', '').strip()
+    if '[Interface]' not in content:
+        return jsonify({'error': 'Invalid AWG config: missing [Interface]'}), 400
+    with open(AWG_CONF_PATH, 'w') as fh:
+        fh.write(content + '\n')
+    os.chmod(AWG_CONF_PATH, 0o600)
     return jsonify({'ok': True})
 
 @app.route('/api/settings/secrets')
@@ -340,6 +522,15 @@ def api_settings_secrets_put():
         fh.write(content)
     os.chmod(AWG_CONF_PATH, 0o600)
     return jsonify({'ok': True})
+
+@app.route('/api/settings/restart-admin', methods=['POST'])
+@require_auth
+def api_settings_restart_admin():
+    def do_restart():
+        time.sleep(1)
+        subprocess.run(['systemctl', 'restart', 'splitgate-admin.service'], timeout=10)
+    threading.Thread(target=do_restart, daemon=True).start()
+    return jsonify({'ok': True, 'message': 'Admin service restarting…'})
 
 @app.route('/api/settings/password', methods=['POST'])
 @require_auth

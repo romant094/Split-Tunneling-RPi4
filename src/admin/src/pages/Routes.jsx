@@ -2,70 +2,342 @@ import { useState, useEffect } from 'react'
 import { apiFetch } from '../api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Trash2, Plus } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Trash2, Pencil, Plus, List, ArrowUpDown, ArrowUp, ArrowDown, Search } from 'lucide-react'
 
 const CIDR_RE = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/
 
-function RouteSection({ title, endpoint }) {
+function ipSortKey(cidr) {
+  const [ip, prefix] = cidr.split('/')
+  const parts = ip.split('.').map(n => parseInt(n, 10).toString().padStart(3, '0'))
+  return parts.join('.') + '/' + (prefix || '').padStart(2, '0')
+}
+
+function parseBulkText(text) {
+  const entries = []
+  let pendingComment = ''
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim()
+    if (!line) { pendingComment = ''; continue }
+    if (line.startsWith('#')) {
+      const comment = line.replace(/^#+\s*/, '')
+      pendingComment = pendingComment ? pendingComment + ' ' + comment : comment
+      continue
+    }
+    if (line.includes('#')) {
+      const idx = line.indexOf('#')
+      const cidr = line.slice(0, idx).trim()
+      const desc = line.slice(idx + 1).trim() || pendingComment
+      if (CIDR_RE.test(cidr)) entries.push({ cidr, description: desc })
+    } else {
+      if (CIDR_RE.test(line)) entries.push({ cidr: line, description: pendingComment })
+    }
+    pendingComment = ''
+  }
+  return entries
+}
+
+function AddSingleDialog({ open, onClose, onAdd, existingCidrs }) {
+  const [cidr, setCidr] = useState('')
+  const [desc, setDesc] = useState('')
+  const [err, setErr] = useState('')
+
+  function reset() { setCidr(''); setDesc(''); setErr('') }
+
+  async function handleAdd() {
+    const c = cidr.trim()
+    if (!CIDR_RE.test(c)) { setErr('Invalid CIDR format (e.g. 1.2.3.0/24)'); return }
+    if (existingCidrs.has(c)) { setErr('This route already exists'); return }
+    setErr('')
+    await onAdd({ cidr: c, description: desc.trim() })
+    reset()
+    onClose()
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) { reset(); onClose() } }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add Route</DialogTitle>
+          <DialogDescription>Enter a CIDR and optional description.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="space-y-1.5">
+            <Label>CIDR</Label>
+            <Input value={cidr} onChange={e => { setCidr(e.target.value); setErr('') }}
+              placeholder="x.x.x.x/n" className="font-mono"
+              onKeyDown={e => e.key === 'Enter' && handleAdd()} autoFocus />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Input value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. GitHub CDN" />
+          </div>
+          {err && <p className="text-destructive text-sm">{err}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { reset(); onClose() }}>Cancel</Button>
+          <Button onClick={handleAdd}>Add</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function AddBulkDialog({ open, onClose, onBulkAdd }) {
+  const [text, setText] = useState('')
+  const [result, setResult] = useState(null)
+
+  function reset() { setText(''); setResult(null) }
+
+  async function handleAdd() {
+    const entries = parseBulkText(text)
+    if (entries.length === 0) { setResult({ error: 'No valid CIDRs found' }); return }
+    const r = await onBulkAdd(entries)
+    setResult(r)
+    if (r.ok) { reset(); onClose() }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) { reset(); onClose() } }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Add Routes in Bulk</DialogTitle>
+          <DialogDescription>
+            Paste one CIDR per line. Lines starting with <code className="font-mono">#</code> become the description for the next CIDR. Duplicates are skipped automatically.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <Textarea
+            value={text}
+            onChange={e => { setText(e.target.value); setResult(null) }}
+            placeholder={"# GitHub CDN\n185.199.108.0/22\n\n# Cloudflare\n1.0.0.0/24"}
+            className="font-mono text-xs h-48"
+          />
+          {result && (
+            <p className={`text-sm ${result.error ? 'text-destructive' : 'text-primary'}`}>
+              {result.error || `✓ Added ${result.added} route(s)`}
+            </p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { reset(); onClose() }}>Cancel</Button>
+          <Button onClick={handleAdd}>Import</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function EditDialog({ open, entry, onClose, onSave, existingCidrs }) {
+  const [cidr, setCidr] = useState('')
+  const [desc, setDesc] = useState('')
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    if (entry) { setCidr(entry.cidr); setDesc(entry.description || ''); setErr('') }
+  }, [entry])
+
+  async function handleSave() {
+    const c = cidr.trim()
+    if (!CIDR_RE.test(c)) { setErr('Invalid CIDR format'); return }
+    if (c !== entry.cidr && existingCidrs.has(c)) { setErr('A route with this CIDR already exists'); return }
+    setErr('')
+    await onSave({ old_cidr: entry.cidr, cidr: c, description: desc.trim() })
+    onClose()
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit Route</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="space-y-1.5">
+            <Label>CIDR</Label>
+            <Input value={cidr} onChange={e => { setCidr(e.target.value); setErr('') }}
+              className="font-mono" autoFocus />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Input value={desc} onChange={e => setDesc(e.target.value)} />
+          </div>
+          {err && <p className="text-destructive text-sm">{err}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSave}>Save</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function DeleteConfirmDialog({ open, cidr, onClose, onConfirm }) {
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Remove Route</DialogTitle>
+          <DialogDescription>
+            Remove <code className="font-mono text-foreground">{cidr}</code>? This cannot be undone without re-adding it.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="destructive" onClick={onConfirm}>Remove</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function SortIcon({ field, sortField, sortDir }) {
+  if (sortField !== field) return <ArrowUpDown className="h-3 w-3 ml-1 text-muted-foreground/50" />
+  return sortDir === 'asc'
+    ? <ArrowUp className="h-3 w-3 ml-1 text-primary" />
+    : <ArrowDown className="h-3 w-3 ml-1 text-primary" />
+}
+
+function RouteSection({ endpoint }) {
   const [routes, setRoutes] = useState([])
-  const [input, setInput] = useState('')
+  const [filter, setFilter] = useState('')
+  const [sortField, setSortField] = useState('cidr')
+  const [sortDir, setSortDir] = useState('asc')
+  const [addSingle, setAddSingle] = useState(false)
+  const [addBulk, setAddBulk] = useState(false)
+  const [editEntry, setEditEntry] = useState(null)
+  const [deleteEntry, setDeleteEntry] = useState(null)
   const [msg, setMsg] = useState('')
 
   function load() {
-    apiFetch(`/api/routes/${endpoint}`).then(r => r.json()).then(d => setRoutes(d.routes || [])).catch(() => {})
+    apiFetch(`/api/routes/${endpoint}`)
+      .then(r => r.json())
+      .then(d => setRoutes(d.routes || []))
+      .catch(() => {})
   }
 
   useEffect(() => { load() }, [endpoint])
 
-  async function addRoute() {
-    const cidr = input.trim()
-    if (!CIDR_RE.test(cidr)) { setMsg('Invalid CIDR'); return }
+  function toggleSort(field) {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortField(field); setSortDir('asc') }
+  }
+
+  const existingCidrs = new Set(routes.map(r => r.cidr))
+
+  const filtered = routes.filter(r =>
+    !filter || r.cidr.includes(filter) || (r.description || '').toLowerCase().includes(filter.toLowerCase())
+  )
+  const sorted = [...filtered].sort((a, b) => {
+    let va = sortField === 'cidr' ? ipSortKey(a.cidr) : (a.description || '').toLowerCase()
+    let vb = sortField === 'cidr' ? ipSortKey(b.cidr) : (b.description || '').toLowerCase()
+    return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+  })
+
+  async function handleAdd(entry) {
     setMsg('')
-    const r = await apiFetch(`/api/routes/${endpoint}`, { method: 'POST', body: JSON.stringify({ cidr }) })
-    const d = await r.json()
-    if (!r.ok) { setMsg(d.error); return }
-    setInput('')
+    const r = await apiFetch(`/api/routes/${endpoint}`, { method: 'POST', body: JSON.stringify(entry) })
+    if (!r.ok) { const d = await r.json(); setMsg(d.error) }
     load()
   }
 
-  async function removeRoute(cidr) {
-    await apiFetch(`/api/routes/${endpoint}`, { method: 'DELETE', body: JSON.stringify({ cidr }) })
+  async function handleBulkAdd(entries) {
+    const r = await apiFetch(`/api/routes/${endpoint}/bulk`, { method: 'POST', body: JSON.stringify({ entries }) })
+    const d = await r.json()
+    if (r.ok) { load(); return { ok: true, added: d.added } }
+    return { error: d.error || 'Error' }
+  }
+
+  async function handleEdit(payload) {
+    setMsg('')
+    const r = await apiFetch(`/api/routes/${endpoint}`, { method: 'PUT', body: JSON.stringify(payload) })
+    if (!r.ok) { const d = await r.json(); setMsg(d.error) }
+    load()
+  }
+
+  async function handleDelete() {
+    await apiFetch(`/api/routes/${endpoint}`, { method: 'DELETE', body: JSON.stringify({ cidr: deleteEntry.cidr }) })
+    setDeleteEntry(null)
     load()
   }
 
   return (
-    <Card>
-      <CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex gap-2">
-          <Input value={input} onChange={e => setInput(e.target.value)} placeholder="x.x.x.x/n"
-            className="max-w-[200px]" onKeyDown={e => e.key === 'Enter' && addRoute()} />
-          <Button size="sm" onClick={addRoute}><Plus className="h-4 w-4 mr-1" />Add</Button>
-          {msg && <span className="text-destructive text-sm self-center">{msg}</span>}
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+          <Input value={filter} onChange={e => setFilter(e.target.value)}
+            placeholder="Filter by CIDR or description…" className="pl-8 h-8 text-sm" />
         </div>
-        {routes.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No routes configured</p>
-        ) : (
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setAddSingle(true)}>
+            <Plus className="h-3.5 w-3.5 mr-1" />Add
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setAddBulk(true)}>
+            <List className="h-3.5 w-3.5 mr-1" />Add List
+          </Button>
+        </div>
+      </div>
+      {msg && <p className="text-destructive text-sm">{msg}</p>}
+      {sorted.length === 0 ? (
+        <p className="text-muted-foreground text-sm py-4">
+          {filter ? 'No routes match the filter.' : 'No routes configured.'}
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-md border border-border">
           <Table>
-            <TableHeader><TableRow><TableHead>CIDR</TableHead><TableHead className="w-16"></TableHead></TableRow></TableHeader>
+            <TableHeader>
+              <TableRow>
+                <TableHead>
+                  <button className="flex items-center text-xs font-medium uppercase tracking-wide hover:text-foreground"
+                    onClick={() => toggleSort('cidr')}>
+                    CIDR <SortIcon field="cidr" sortField={sortField} sortDir={sortDir} />
+                  </button>
+                </TableHead>
+                <TableHead>
+                  <button className="flex items-center text-xs font-medium uppercase tracking-wide hover:text-foreground"
+                    onClick={() => toggleSort('description')}>
+                    Description <SortIcon field="description" sortField={sortField} sortDir={sortDir} />
+                  </button>
+                </TableHead>
+                <TableHead className="w-20"></TableHead>
+              </TableRow>
+            </TableHeader>
             <TableBody>
-              {routes.map(cidr => (
-                <TableRow key={cidr}>
-                  <TableCell className="font-mono text-sm">{cidr}</TableCell>
+              {sorted.map(r => (
+                <TableRow key={r.cidr}>
+                  <TableCell className="font-mono text-sm w-40">{r.cidr}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{r.description || '—'}</TableCell>
                   <TableCell>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => removeRoute(cidr)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    <div className="flex gap-1 justify-end">
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        onClick={() => setEditEntry(r)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        onClick={() => setDeleteEntry(r)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground">{routes.length} total route{routes.length !== 1 ? 's' : ''}{filter && `, ${sorted.length} shown`}</p>
+
+      <AddSingleDialog open={addSingle} onClose={() => setAddSingle(false)} onAdd={handleAdd} existingCidrs={existingCidrs} />
+      <AddBulkDialog open={addBulk} onClose={() => setAddBulk(false)} onBulkAdd={handleBulkAdd} />
+      <EditDialog open={!!editEntry} entry={editEntry} onClose={() => setEditEntry(null)} onSave={handleEdit} existingCidrs={existingCidrs} />
+      <DeleteConfirmDialog open={!!deleteEntry} cidr={deleteEntry?.cidr} onClose={() => setDeleteEntry(null)} onConfirm={handleDelete} />
+    </div>
   )
 }
 
@@ -84,13 +356,38 @@ export default function RoutesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <h1 className="text-2xl font-semibold">Routes</h1>
-        <Button onClick={applyRoutes} disabled={applying} size="sm">Apply Changes</Button>
-        {applyMsg && <span className={`text-sm ${applyMsg.startsWith('Error') ? 'text-destructive' : 'text-primary'}`}>{applyMsg}</span>}
+      <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+        <div className="flex-1">
+          <h1 className="text-2xl font-semibold">Routes</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Manage custom CIDR routes. <strong>VPN</strong> tab — force traffic through the tunnel.
+            <strong> ISP</strong> tab — force traffic through the direct ISP connection. Click <em>Apply</em> to activate changes.
+          </p>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <Button onClick={applyRoutes} disabled={applying} size="sm">Apply Changes</Button>
+          {applyMsg && <span className={`text-sm ${applyMsg.startsWith('Error') ? 'text-destructive' : 'text-primary'}`}>{applyMsg}</span>}
+        </div>
       </div>
-      <RouteSection title="VPN Force-Routes (vpn-routes-custom.txt)" endpoint="vpn" />
-      <RouteSection title="ISP Exception Routes (isp-routes-custom.txt)" endpoint="isp" />
+
+      <Tabs defaultValue="vpn">
+        <TabsList>
+          <TabsTrigger value="vpn">VPN Routes</TabsTrigger>
+          <TabsTrigger value="isp">ISP Routes</TabsTrigger>
+        </TabsList>
+        <TabsContent value="vpn" className="mt-4">
+          <p className="text-sm text-muted-foreground mb-4">
+            CIDRs in this list are force-routed through the AmneziaWG VPN tunnel — overrides the auto-downloaded RU list.
+          </p>
+          <RouteSection endpoint="vpn" />
+        </TabsContent>
+        <TabsContent value="isp" className="mt-4">
+          <p className="text-sm text-muted-foreground mb-4">
+            CIDRs in this list bypass the VPN and are routed directly via the ISP (Keenetic).
+          </p>
+          <RouteSection endpoint="isp" />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

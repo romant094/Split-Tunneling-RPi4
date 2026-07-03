@@ -19,7 +19,10 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Dashboard</h1>
+      <div>
+        <h1 className="text-2xl font-semibold">Dashboard</h1>
+        <p className="text-muted-foreground text-sm mt-1">Live status overview of the VPN gateway. Auto-refreshes every 10 s.</p>
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">VPN Tunnel</CardTitle></CardHeader>
