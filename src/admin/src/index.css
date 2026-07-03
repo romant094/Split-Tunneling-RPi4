@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Light theme (default) */
 :root {
   --bg: hsl(0 0% 98%);

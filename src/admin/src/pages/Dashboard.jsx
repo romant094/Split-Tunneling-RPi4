@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { apiFetch } from '../api'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -20,8 +20,8 @@ function statusVariant(s) {
   return 'warning'
 }
 
-function fmt(bytes) {
-  if (bytes === 0) return '—'
+function fmtMem(bytes) {
+  if (!bytes) return '—'
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
@@ -30,46 +30,47 @@ function fmtGB(bytes) {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`
 }
 
-function UsageBar({ pct, className = '' }) {
-  const color = pct > 85 ? 'bg-destructive' : pct > 60 ? 'bg-amber-500' : 'bg-primary'
-  return (
-    <div className={`h-1.5 rounded-full bg-border overflow-hidden ${className}`}>
-      <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
-    </div>
-  )
+function useResourcesSSE() {
+  const [resources, setResources] = useState(null)
+  const esRef = useRef(null)
+
+  useEffect(() => {
+    function connect() {
+      const es = new EventSource('/api/resources/watch')
+      esRef.current = es
+      es.onmessage = e => {
+        try { setResources(JSON.parse(e.data)) } catch {}
+      }
+      es.onerror = () => { es.close(); setTimeout(connect, 5000) }
+    }
+    connect()
+    return () => { esRef.current?.close() }
+  }, [])
+
+  return resources
 }
 
 export default function Dashboard() {
   const [status, setStatus] = useState(null)
-  const [resources, setResources] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
+  const resources = useResourcesSSE()
 
-  const loadStatus = useCallback(() => {
-    return apiFetch('/api/status').then(r => r.json()).then(setStatus).catch(() => {})
-  }, [])
-
-  const loadResources = useCallback(() => {
-    return apiFetch('/api/status/resources').then(r => r.json()).then(setResources).catch(() => {})
-  }, [])
+  const loadStatus = useCallback(() =>
+    apiFetch('/api/status').then(r => r.json()).then(setStatus).catch(() => {}), [])
 
   useEffect(() => {
     loadStatus()
-    loadResources()
-    const id1 = setInterval(loadStatus, 10000)
-    const id2 = setInterval(loadResources, 5000)
-    return () => { clearInterval(id1); clearInterval(id2) }
-  }, [loadStatus, loadResources])
+    const id = setInterval(loadStatus, 10000)
+    return () => clearInterval(id)
+  }, [loadStatus])
 
   async function handleRefresh() {
     setRefreshing(true)
-    await Promise.all([loadStatus(), loadResources()])
+    await loadStatus()
     setRefreshing(false)
   }
 
   if (!status) return <div className="text-muted-foreground text-sm p-4">Loading…</div>
-
-  const memPct = resources ? Math.round(resources.mem_used / resources.mem_total * 100) : 0
-  const diskPct = resources ? Math.round(resources.disk_used / resources.disk_total * 100) : 0
 
   return (
     <div className="space-y-6">
@@ -107,32 +108,37 @@ export default function Dashboard() {
 
         {/* Routes */}
         <Card>
-          <CardHeader className="pb-3">
+          <CardHeader className="pb-2">
             <CardTitle className="text-base">Routes</CardTitle>
-            <CardDescription>
-              RU list updated: <span className="font-mono text-xs text-foreground">{status.ru_list_updated || '—'}</span>
-            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">ISP (direct)</p>
-              <div className="space-y-2 pl-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">From RU IP list</span>
-                  <span className="text-xl font-semibold">{status.ru_route_count ?? '—'}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Custom ISP routes</span>
-                  <span className="text-xl font-semibold">{status.isp_route_count ?? '—'}</span>
+          <CardContent className="space-y-0">
+            {/* Date right-aligned with separator */}
+            <div className="flex justify-end pb-2">
+              <span className="text-sm text-muted-foreground font-mono">
+                {status.ru_list_updated || '—'}
+              </span>
+            </div>
+            <div className="border-t border-border pt-3 space-y-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">ISP (direct)</p>
+                <div className="space-y-2 pl-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">From RU IP list</span>
+                    <span className="text-base font-mono">{status.ru_route_count ?? '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Custom ISP routes</span>
+                    <span className="text-base font-mono">{status.isp_route_count ?? '—'}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="border-t border-border pt-3">
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">VPN (tunnel)</p>
-              <div className="pl-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Custom VPN routes</span>
-                  <span className="text-xl font-semibold">{status.vpn_custom_count ?? '—'}</span>
+              <div className="border-t border-border pt-3">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">VPN (tunnel)</p>
+                <div className="pl-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Custom VPN routes</span>
+                    <span className="text-base font-mono">{status.vpn_custom_count ?? '—'}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -144,61 +150,52 @@ export default function Dashboard() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Resources</CardTitle>
-          <CardDescription>System and per-service usage. Refreshes every 5 s.</CardDescription>
+          <CardDescription>System and per-service usage. Live via SSE.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-5">
-          {/* System metrics */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">CPU</span>
-                <span className="font-mono font-semibold">{resources ? `${resources.cpu_percent}%` : '—'}</span>
-              </div>
-              <UsageBar pct={resources?.cpu_percent ?? 0} />
+        <CardContent className="space-y-4">
+          {/* System summary row */}
+          <div className="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <span className="text-xs uppercase tracking-widest text-muted-foreground block mb-0.5">CPU</span>
+              <span className="font-mono">{resources ? `${resources.cpu_percent}%` : '—'}</span>
             </div>
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">RAM</span>
-                <span className="font-mono font-semibold">
-                  {resources ? `${fmtGB(resources.mem_used)} / ${fmtGB(resources.mem_total)} (${memPct}%)` : '—'}
-                </span>
-              </div>
-              <UsageBar pct={memPct} />
+            <div>
+              <span className="text-xs uppercase tracking-widest text-muted-foreground block mb-0.5">RAM</span>
+              <span className="font-mono">
+                {resources ? `${fmtGB(resources.mem_used)} / ${fmtGB(resources.mem_total)}` : '—'}
+              </span>
             </div>
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Disk</span>
-                <span className="font-mono font-semibold">
-                  {resources ? `${fmtGB(resources.disk_used)} / ${fmtGB(resources.disk_total)} (${diskPct}%)` : '—'}
-                </span>
-              </div>
-              <UsageBar pct={diskPct} />
+            <div>
+              <span className="text-xs uppercase tracking-widest text-muted-foreground block mb-0.5">Disk</span>
+              <span className="font-mono">
+                {resources ? `${fmtGB(resources.disk_used)} / ${fmtGB(resources.disk_total)}` : '—'}
+              </span>
             </div>
           </div>
 
           {/* Per-service table */}
-          <div className="border-t border-border pt-4">
-            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Per service</p>
-            <div className="space-y-2">
-              {(resources?.services || []).map(svc => (
-                <div key={svc.name} className="flex items-center gap-3">
-                  <span className="text-sm text-muted-foreground w-40 shrink-0 font-mono">{svc.name}</span>
-                  <div className="flex-1 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground w-8">CPU</span>
-                      <UsageBar pct={svc.cpu} className="flex-1" />
-                      <span className="text-xs font-mono w-10 text-right">{svc.cpu.toFixed(1)}%</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground w-8">MEM</span>
-                      <UsageBar pct={svc.mem / (resources.mem_total || 1) * 100} className="flex-1" />
-                      <span className="text-xs font-mono w-10 text-right">{fmt(svc.mem)}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {!resources && <p className="text-sm text-muted-foreground">Loading…</p>}
-            </div>
+          <div className="border-t border-border pt-3">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs uppercase tracking-widest text-muted-foreground">
+                  <th className="text-left font-normal pb-2">Service</th>
+                  <th className="text-right font-normal pb-2 w-20">CPU</th>
+                  <th className="text-right font-normal pb-2 w-24">RAM</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {(resources?.services || []).map(svc => (
+                  <tr key={svc.name}>
+                    <td className="py-1.5 font-mono text-muted-foreground">{svc.name}</td>
+                    <td className="py-1.5 text-right font-mono">{svc.cpu.toFixed(1)}%</td>
+                    <td className="py-1.5 text-right font-mono">{fmtMem(svc.mem)}</td>
+                  </tr>
+                ))}
+                {!resources && (
+                  <tr><td colSpan={3} className="py-2 text-muted-foreground">Connecting…</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </CardContent>
       </Card>

@@ -561,9 +561,7 @@ def api_settings_secrets_put():
     os.chmod(AWG_CONF_PATH, 0o600)
     return jsonify({'ok': True})
 
-@app.route('/api/status/resources')
-@require_auth
-def api_status_resources():
+def _collect_resources():
     def read_stat():
         with open('/proc/stat') as f:
             parts = f.readline().split()[1:8]
@@ -609,14 +607,36 @@ def api_status_resources():
             svc_cpu, svc_mem = 0.0, 0
         svcs.append({'name': name, 'cpu': svc_cpu, 'mem': svc_mem})
 
-    return jsonify({
+    return {
         'cpu_percent': cpu_pct,
         'mem_total': mem_total,
         'mem_used': mem_used,
         'disk_total': disk_total,
         'disk_used': disk_used,
         'services': svcs,
-    })
+    }
+
+@app.route('/api/status/resources')
+@require_auth
+def api_status_resources():
+    return jsonify(_collect_resources())
+
+@app.route('/api/resources/watch')
+@require_auth
+def api_resources_watch():
+    def generate():
+        while True:
+            try:
+                data = _collect_resources()
+                yield f'data: {json.dumps(data)}\n\n'
+            except Exception as e:
+                yield f'data: {json.dumps({"error": str(e)})}\n\n'
+            time.sleep(5)
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+    )
 
 @app.route('/api/settings/restart-admin', methods=['POST'])
 @require_auth
