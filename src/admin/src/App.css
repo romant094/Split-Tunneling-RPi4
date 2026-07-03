@@ -1,83 +1,14 @@
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: #1a1a1a; color: #e0e0e0; font-family: monospace; }
-
-.login-bg { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: radial-gradient(ellipse at 50% 40%, #1e2a1e 0%, #111 60%, #0d0d0d 100%); }
-.login-card { width: 360px; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; padding: 40px 36px; box-shadow: 0 8px 40px rgba(0,0,0,0.6); }
-.login-logo { display: flex; justify-content: center; margin-bottom: 16px; }
-.login-title { text-align: center; font-size: 22px; font-weight: bold; color: #e0e0e0; letter-spacing: 1px; }
-.login-subtitle { text-align: center; color: #666; font-size: 12px; margin-bottom: 32px; letter-spacing: 0.5px; text-transform: uppercase; }
-.login-form { display: flex; flex-direction: column; gap: 16px; }
-.login-field { display: flex; flex-direction: column; gap: 6px; }
-.login-field label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
-.login-field input { padding: 10px 12px; background: #111; border: 1px solid #333; border-radius: 4px; color: #e0e0e0; font-size: 14px; font-family: monospace; outline: none; transition: border-color 0.15s; }
-.login-field input:focus { border-color: #4caf50; }
-.login-error { display: flex; align-items: center; gap: 6px; color: #f44336; font-size: 12px; padding: 8px 10px; background: rgba(244,67,54,0.08); border: 1px solid rgba(244,67,54,0.2); border-radius: 4px; }
-.login-btn { padding: 11px; background: #4caf50; color: #000; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; letter-spacing: 0.5px; transition: background 0.15s; margin-top: 4px; }
-.login-btn:hover { background: #66bb6a; }
-.login-btn:disabled { background: #2a2a2a; color: #555; cursor: not-allowed; }
-.login-spinner { letter-spacing: 4px; animation: pulse 1s infinite; }
-@keyframes pulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
-.login-hint { text-align: center; color: #3a3a3a; font-size: 11px; margin-top: 24px; font-family: monospace; }
-.error { color: #f44336; font-size: 13px; }
-
-.navbar { display: flex; align-items: center; gap: 16px; padding: 12px 24px; background: #111; border-bottom: 1px solid #333; }
-.nav-brand { color: #4caf50; font-weight: bold; font-size: 18px; margin-right: 16px; }
-.nav-links { display: flex; gap: 8px; flex: 1; }
-.nav-link { color: #aaa; text-decoration: none; padding: 6px 12px; border-radius: 4px; }
-.nav-link:hover { color: #e0e0e0; background: #222; }
-.nav-link.active { color: #4caf50; font-weight: bold; border-bottom: 2px solid #4caf50; }
-.logout-btn { background: transparent; border: 1px solid #444; color: #aaa; padding: 6px 12px; cursor: pointer; }
-.logout-btn:hover { color: #f44336; border-color: #f44336; }
-
-.main-content { padding: 24px; max-width: 1200px; margin: 0 auto; }
-h2 { color: #e0e0e0; margin-bottom: 16px; font-size: 20px; }
-h3 { color: #bbb; margin-bottom: 12px; font-size: 16px; }
-
-.card { background: #222; border: 1px solid #333; padding: 16px; border-radius: 4px; margin-bottom: 16px; }
-.card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
-.stat-card { background: #222; border: 1px solid #333; padding: 16px; border-radius: 4px; }
-.stat-label { color: #888; font-size: 12px; margin-bottom: 8px; }
-.stat-value { font-size: 24px; font-weight: bold; }
-
-.badge { padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: bold; }
-.badge-green { background: #1b5e20; color: #4caf50; }
-.badge-red { background: #b71c1c; color: #ef5350; }
-.badge-gray { background: #333; color: #888; }
-.badge-yellow { background: #5d4037; color: #ffb74d; }
-
-table { width: 100%; border-collapse: collapse; }
-th { text-align: left; padding: 10px; background: #111; color: #888; font-size: 12px; border-bottom: 1px solid #333; }
-td { padding: 10px; border-bottom: 1px solid #2a2a2a; }
-
-button { cursor: pointer; border: none; padding: 6px 12px; border-radius: 3px; font-size: 13px; }
-button:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-green { background: #4caf50; color: #000; }
-.btn-red { background: #f44336; color: #fff; }
-.btn-gray { background: #444; color: #e0e0e0; }
-.btn-blue { background: #1976d2; color: #fff; }
-
-input[type="text"], textarea { background: #2a2a2a; border: 1px solid #444; color: #e0e0e0; padding: 8px; font-family: monospace; font-size: 13px; }
-input[type="text"] { width: 100%; }
-textarea { width: 100%; resize: vertical; }
-
-.tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid #333; }
-.tab { padding: 8px 16px; background: transparent; border: none; color: #888; cursor: pointer; border-bottom: 2px solid transparent; font-size: 14px; }
-.tab.active { color: #4caf50; border-bottom: 2px solid #4caf50; }
-
-.log-container { background: #111; border: 1px solid #333; padding: 12px; height: 500px; overflow-y: auto; font-size: 12px; line-height: 1.6; }
+/* App-level overrides only — Tailwind handles everything else */
+.log-container {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-y: auto;
+  height: 500px;
+  background: hsl(0 0% 5%);
+  border: 1px solid hsl(0 0% 18%);
+  border-radius: 6px;
+  padding: 12px;
+}
 .log-line-vpn { color: #00ffff; }
 .log-line-isp { color: #ffff00; }
-
-.section { margin-bottom: 32px; }
-.row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-.msg-ok { color: #4caf50; font-size: 13px; }
-.msg-err { color: #f44336; font-size: 13px; }
-
-.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.modal { background: #222; border: 1px solid #444; padding: 24px; width: 400px; border-radius: 4px; }
-.modal h3 { margin-bottom: 12px; }
-.modal p { color: #aaa; margin-bottom: 16px; font-size: 13px; }
-.modal-buttons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
-
-.key-value-row { display: grid; grid-template-columns: 200px 1fr 80px; gap: 8px; align-items: center; margin-bottom: 8px; }
-.key-input { background: #1a1a1a; border: 1px solid #333; color: #888; padding: 6px 8px; font-family: monospace; font-size: 13px; }

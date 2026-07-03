@@ -1,103 +1,92 @@
-import { useState, useEffect, useRef } from 'react';
-import { apiFetch } from '../api';
+import { useState, useEffect, useRef } from 'react'
+import { apiFetch } from '../api'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
-function LogContainer({ lines, colorize }) {
-  const ref = useRef(null);
+function LogBox({ lines, colorize }) {
+  const ref = useRef(null)
   useEffect(() => {
-    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
-  }, [lines]);
-
+    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight
+  }, [lines])
   return (
     <div className="log-container" ref={ref}>
       {lines.map((line, i) => {
-        let cls = '';
+        let cls = ''
         if (colorize) {
-          if (line.includes('[VPN]')) cls = 'log-line-vpn';
-          else if (line.includes('[ISP]')) cls = 'log-line-isp';
+          if (line.includes('[VPN]')) cls = 'log-line-vpn'
+          else if (line.includes('[ISP]')) cls = 'log-line-isp'
         }
-        return <div key={i} className={cls}>{line}</div>;
+        return <div key={i} className={cls}>{line || ' '}</div>
       })}
+      {lines.length === 0 && <div className="text-muted-foreground">No output</div>}
     </div>
-  );
+  )
 }
 
 function WatchLive() {
-  const [lines, setLines] = useState([]);
-  const [filter, setFilter] = useState('');
-  const [tagFilter, setTagFilter] = useState('both');
-  const esRef = useRef(null);
+  const [lines, setLines] = useState([])
+  const [filter, setFilter] = useState('')
+  const [tagFilter, setTagFilter] = useState('both')
 
   useEffect(() => {
-    const es = new EventSource('/api/logs/watch', { withCredentials: true });
-    esRef.current = es;
-    es.onmessage = e => {
-      setLines(prev => [...prev, e.data].slice(-1000));
-    };
-    return () => es.close();
-  }, []);
+    const es = new EventSource('/api/logs/watch', { withCredentials: true })
+    es.onmessage = e => setLines(prev => [...prev, e.data].slice(-1000))
+    return () => es.close()
+  }, [])
 
   const visible = lines.filter(l => {
-    if (filter && !l.includes(filter)) return false;
-    if (tagFilter === 'vpn' && !l.includes('[VPN]')) return false;
-    if (tagFilter === 'isp' && !l.includes('[ISP]')) return false;
-    return true;
-  });
+    if (filter && !l.includes(filter)) return false
+    if (tagFilter === 'vpn' && !l.includes('[VPN]')) return false
+    if (tagFilter === 'isp' && !l.includes('[ISP]')) return false
+    return true
+  })
 
   return (
-    <div>
-      <div className="row" style={{ marginBottom: 12 }}>
-        <input type="text" value={filter} onChange={e => setFilter(e.target.value)}
-          placeholder="Filter..." style={{ maxWidth: 200 }} />
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Filter…" className="max-w-[200px] h-8" />
         {['both', 'vpn', 'isp'].map(t => (
-          <button key={t} className={tagFilter === t ? 'btn-blue' : 'btn-gray'}
-            style={{ textTransform: 'uppercase', fontSize: 12 }}
-            onClick={() => setTagFilter(t)}>{t}</button>
+          <Button key={t} size="sm" variant={tagFilter === t ? 'default' : 'outline'} className="h-8 uppercase text-xs" onClick={() => setTagFilter(t)}>{t}</Button>
         ))}
-        <button className="btn-gray" onClick={() => setLines([])}>Clear</button>
+        <Button size="sm" variant="ghost" className="h-8" onClick={() => setLines([])}>Clear</Button>
+        <span className="text-muted-foreground text-xs ml-auto">{visible.length} lines</span>
       </div>
-      <LogContainer lines={visible} colorize />
+      <LogBox lines={visible} colorize />
     </div>
-  );
+  )
 }
 
 function StaticLog({ endpoint }) {
-  const [lines, setLines] = useState([]);
+  const [lines, setLines] = useState([])
   function load() {
-    apiFetch(endpoint).then(r => r.json()).then(d => setLines(d.lines || [])).catch(() => {});
+    apiFetch(endpoint).then(r => r.json()).then(d => setLines(d.lines || [])).catch(() => {})
   }
-  useEffect(() => { load(); }, [endpoint]);
+  useEffect(() => { load() }, [endpoint])
   return (
-    <div>
-      <button className="btn-gray" style={{ marginBottom: 12 }} onClick={load}>Refresh</button>
-      <LogContainer lines={lines} colorize={false} />
+    <div className="space-y-3">
+      <Button size="sm" variant="outline" onClick={load}>Refresh</Button>
+      <LogBox lines={lines} colorize={false} />
     </div>
-  );
+  )
 }
 
-const TABS = [
-  { id: 'live', label: 'Watch Live' },
-  { id: 'install', label: 'Install Log' },
-  { id: 'errors', label: 'Watch Errors' },
-  { id: 'journal', label: 'System Journal' },
-];
-
 export default function Logs() {
-  const [tab, setTab] = useState('live');
-
   return (
-    <div>
-      <h2>Logs</h2>
-      <div className="tabs">
-        {TABS.map(t => (
-          <button key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-      {tab === 'live' && <WatchLive />}
-      {tab === 'install' && <StaticLog endpoint="/api/logs/install" />}
-      {tab === 'errors' && <StaticLog endpoint="/api/logs/watch-errors" />}
-      {tab === 'journal' && <StaticLog endpoint="/api/logs/journal" />}
+    <div className="space-y-6">
+      <h1 className="text-2xl font-semibold">Logs</h1>
+      <Tabs defaultValue="live">
+        <TabsList>
+          <TabsTrigger value="live">Watch Live</TabsTrigger>
+          <TabsTrigger value="install">Install Log</TabsTrigger>
+          <TabsTrigger value="errors">Watch Errors</TabsTrigger>
+          <TabsTrigger value="journal">System Journal</TabsTrigger>
+        </TabsList>
+        <TabsContent value="live"><WatchLive /></TabsContent>
+        <TabsContent value="install"><StaticLog endpoint="/api/logs/install" /></TabsContent>
+        <TabsContent value="errors"><StaticLog endpoint="/api/logs/watch-errors" /></TabsContent>
+        <TabsContent value="journal"><StaticLog endpoint="/api/logs/journal" /></TabsContent>
+      </Tabs>
     </div>
-  );
+  )
 }

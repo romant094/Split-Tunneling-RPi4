@@ -1,53 +1,51 @@
-import { useState, useEffect } from 'react';
-import { apiFetch } from '../api';
+import { useState, useEffect } from 'react'
+import { apiFetch } from '../api'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 
 export default function Dashboard() {
-  const [status, setStatus] = useState(null);
+  const [status, setStatus] = useState(null)
 
   useEffect(() => {
     function load() {
-      apiFetch('/api/status').then(r => r.json()).then(setStatus).catch(() => {});
+      apiFetch('/api/status').then(r => r.json()).then(setStatus).catch(() => {})
     }
-    load();
-    const id = setInterval(load, 10000);
-    return () => clearInterval(id);
-  }, []);
+    load()
+    const id = setInterval(load, 10000)
+    return () => clearInterval(id)
+  }, [])
 
-  if (!status) return <div>Loading...</div>;
+  if (!status) return <div className="text-muted-foreground text-sm p-4">Loading…</div>
 
   return (
-    <div>
-      <h2>Dashboard</h2>
-      <div className="card-grid">
-        <div className="stat-card">
-          <div className="stat-label">VPN Tunnel</div>
-          <span className={`badge ${status.tunnel_up ? 'badge-green' : 'badge-red'}`}>
-            {status.tunnel_up ? 'UP' : 'DOWN'}
-          </span>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Watch Daemon</div>
-          <span className={`badge ${status.daemon_up ? 'badge-green' : 'badge-red'}`}>
-            {status.daemon_up ? 'running' : 'stopped'}
-          </span>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">RU List Updated</div>
-          <div className="stat-value" style={{ fontSize: '14px' }}>{status.ru_list_updated || 'unknown'}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">VPN Routes</div>
-          <div className="stat-value">{status.vpn_route_count}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">ISP Routes</div>
-          <div className="stat-value">{status.isp_route_count}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">RU Routes</div>
-          <div className="stat-value">{status.ru_route_count}</div>
-        </div>
+    <div className="space-y-6">
+      <h1 className="text-2xl font-semibold">Dashboard</h1>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">VPN Tunnel</CardTitle></CardHeader>
+          <CardContent><Badge variant={status.tunnel_up ? 'success' : 'destructive'}>{status.tunnel_up ? 'UP' : 'DOWN'}</Badge></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Watch Daemon</CardTitle></CardHeader>
+          <CardContent><Badge variant={status.daemon_up ? 'success' : 'destructive'}>{status.daemon_up ? 'running' : 'stopped'}</Badge></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">RU List Updated</CardTitle></CardHeader>
+          <CardContent><span className="text-sm font-mono">{status.ru_list_updated || '—'}</span></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">VPN Routes</CardTitle></CardHeader>
+          <CardContent><span className="text-3xl font-bold">{status.vpn_route_count}</span></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">ISP Routes</CardTitle></CardHeader>
+          <CardContent><span className="text-3xl font-bold">{status.isp_route_count}</span></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">RU Routes</CardTitle></CardHeader>
+          <CardContent><span className="text-3xl font-bold">{status.ru_route_count}</span></CardContent>
+        </Card>
       </div>
     </div>
-  );
+  )
 }

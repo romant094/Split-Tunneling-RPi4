@@ -7,12 +7,24 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy:admin": "npm run build && ssh pi4 'sudo rm -rf /tmp/sg-admin-tmp && mkdir -p /tmp/sg-admin-tmp' && scp -r dist/. pi4:/tmp/sg-admin-tmp/ && scp ../scripts/splitgate-admin.py pi4:/tmp/sg-admin-py.tmp && ssh pi4 'sudo cp -r /tmp/sg-admin-tmp/. /etc/splitgate/admin/ && sudo rm -rf /tmp/sg-admin-tmp && sudo chown -R root:root /etc/splitgate/admin && sudo mv /tmp/sg-admin-py.tmp /usr/local/bin/splitgate-admin && sudo chmod +x /usr/local/bin/splitgate-admin && sudo systemctl restart splitgate-admin.service && echo DONE'"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.18",
+    "@radix-ui/react-label": "^2.1.11",
+    "@radix-ui/react-separator": "^1.1.11",
+    "@radix-ui/react-slot": "^1.3.0",
+    "@radix-ui/react-tabs": "^1.1.16",
+    "@tailwindcss/vite": "^4.3.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.23.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-router-dom": "^7.18.1"
+    "react-router-dom": "^7.18.1",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^4.3.2"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",
