@@ -47,12 +47,12 @@ def require_auth(f):
             with open(ADMIN_SECRET_PATH) as fh:
                 stored_pw = fh.read().strip()
         except FileNotFoundError:
-            return Response('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="splitgate"'})
+            return Response('Unauthorized', 401)
         auth = request.authorization
         if not auth:
-            return Response('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="splitgate"'})
+            return Response('Unauthorized', 401)
         if not secrets.compare_digest(auth.password.encode(), stored_pw.encode()):
-            return Response('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="splitgate"'})
+            return Response('Unauthorized', 401)
         session_token = secrets.token_hex(16)
         _sessions.add(session_token)
         inner_result = f(*args, **kwargs)
@@ -566,12 +566,10 @@ def api_settings_rollback():
 
 
 @app.route('/')
-@require_auth
 def index():
     return send_from_directory(ADMIN_DIST_DIR, 'index.html')
 
 @app.route('/<path:path>')
-@require_auth
 def static_files(path):
     file_path = os.path.join(ADMIN_DIST_DIR, path)
     if os.path.isfile(file_path):
