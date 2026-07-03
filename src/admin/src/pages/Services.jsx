@@ -3,6 +3,10 @@ import { apiFetch } from '../api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
+
+// Admin is excluded from this page (managed separately)
+const DISPLAY_SERVICES = ['awg0', 'splitgate-watch', 'networking', 'dnsmasq']
 
 const SERVICE_META = {
   'awg0': {
@@ -14,11 +18,6 @@ const SERVICE_META = {
     label: 'Splitgate Watch',
     desc: 'Traffic monitor — reads the routing log in real time and classifies flows by VPN or ISP path.',
     restartTime: '1–2 sec',
-  },
-  'splitgate-admin': {
-    label: 'Splitgate Admin',
-    desc: 'This web admin interface. Restarting will disconnect your browser session for a few seconds.',
-    restartTime: '2–4 sec',
   },
   'networking': {
     label: 'Networking',
@@ -42,10 +41,14 @@ function statusVariant(s) {
 export default function Services() {
   const [services, setServices] = useState([])
   const [loading, setLoading] = useState({})
+  const [bulkLoading, setBulkLoading] = useState(null)
   const [msg, setMsg] = useState('')
 
   function load() {
-    apiFetch('/api/services').then(r => r.json()).then(setServices).catch(() => {})
+    apiFetch('/api/services')
+      .then(r => r.json())
+      .then(all => setServices(all.filter(s => DISPLAY_SERVICES.includes(s.name))))
+      .catch(() => {})
   }
 
   useEffect(() => {
@@ -66,15 +69,29 @@ export default function Services() {
     load()
   }
 
+  async function bulkAction(act) {
+    setBulkLoading(act)
+    setMsg('')
+    const r = await apiFetch(`/api/services/bulk/${act}`, { method: 'POST' })
+    if (!r.ok) {
+      const d = await r.json()
+      setMsg(`Bulk ${act} errors: ${(d.errors || []).join(', ')}`)
+    } else {
+      setMsg(`✓ ${act.charAt(0).toUpperCase() + act.slice(1)} all done`)
+    }
+    setBulkLoading(null)
+    load()
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Services</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Manage and monitor all system services that make up the VPN gateway. Auto-refreshes every 5 s.
+          Manage VPN gateway services. Auto-refreshes every 5 s.
         </p>
       </div>
-      {msg && <p className="text-destructive text-sm">{msg}</p>}
+      {msg && <p className={`text-sm ${msg.startsWith('✓') ? 'text-primary' : 'text-destructive'}`}>{msg}</p>}
       <div className="space-y-3">
         {services.map(svc => {
           const busy = loading[svc.name]
@@ -112,6 +129,21 @@ export default function Services() {
             </Card>
           )
         })}
+      </div>
+
+      <Separator />
+
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-sm text-muted-foreground">Bulk actions (excluding admin):</span>
+        <Button size="sm" disabled={!!bulkLoading} onClick={() => bulkAction('start')}>
+          {bulkLoading === 'start' ? 'Starting…' : 'Start All'}
+        </Button>
+        <Button size="sm" variant="destructive" disabled={!!bulkLoading} onClick={() => bulkAction('stop')}>
+          {bulkLoading === 'stop' ? 'Stopping…' : 'Stop All'}
+        </Button>
+        <Button size="sm" variant="outline" disabled={!!bulkLoading} onClick={() => bulkAction('restart')}>
+          {bulkLoading === 'restart' ? 'Restarting…' : 'Restart All'}
+        </Button>
       </div>
     </div>
   )

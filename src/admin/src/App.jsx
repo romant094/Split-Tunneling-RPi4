@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { HashRouter, Routes, Route, NavLink } from 'react-router-dom'
 import { Shield, LayoutDashboard, Server, Route as RouteIcon, FileText, Settings2, LogOut, Menu, X } from 'lucide-react'
 import { setAuth, clearAuth, apiFetch, apiLogout } from './api'
+import { subscribeMeta } from './logStream'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -127,6 +128,9 @@ function NavItems({ onNav }) {
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(!!sessionStorage.getItem('sg_auth'))
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [logBgMode, setLogBgMode] = useState(false)
+
+  useEffect(() => subscribeMeta(s => setLogBgMode(s.bgMode)), [])
 
   async function handleLogout() {
     await apiLogout()
@@ -151,7 +155,13 @@ export default function App() {
               <NavItems />
             </div>
 
-            <div className="flex items-center gap-2 ml-auto">
+            {logBgMode && (
+              <span className="hidden sm:flex items-center gap-1.5 text-xs text-primary ml-auto">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse shrink-0" />
+                Logs recording
+              </span>
+            )}
+            <div className="flex items-center gap-2 ml-auto sm:ml-0">
               <Button variant="ghost" size="sm" onClick={handleLogout}
                 className="hidden md:flex text-muted-foreground hover:text-foreground gap-1.5">
                 <LogOut className="h-3.5 w-3.5" />

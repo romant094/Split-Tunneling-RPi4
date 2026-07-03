@@ -6,7 +6,7 @@ Decisions: D-08 single-file Flask, D-09 Basic Auth via /etc/splitgate/admin.secr
 """
 
 import os, re, hmac, time, json, secrets, subprocess, functools, threading
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from collections import deque
 from flask import Flask, request, jsonify, send_from_directory, Response, stream_with_context, make_response
 
@@ -160,25 +160,37 @@ def tail_file(path, n=200):
 @app.route('/api/status')
 @require_auth
 def api_status():
-    r = subprocess.run(['systemctl', 'is-active', 'awg-quick@awg0'], capture_output=True, text=True, timeout=5)
-    tunnel_up = r.returncode == 0
-    r2 = subprocess.run(['systemctl', 'is-active', 'splitgate-watch.service'], capture_output=True, text=True, timeout=5)
-    daemon_up = r2.returncode == 0
+    # Check all services in one pass
+    svc_statuses = {}
+    for name in MANAGED_SERVICES:
+        unit = SERVICE_UNIT_MAP[name]
+        r = subprocess.run(['systemctl', 'is-active', unit], capture_output=True, text=True, timeout=5)
+        svc_statuses[name] = r.stdout.strip() or 'unknown'
+    tunnel_up = svc_statuses.get('awg0') == 'active'
+    daemon_up = svc_statuses.get('splitgate-watch') == 'active'
+    services = [{'name': n, 'status': s} for n, s in svc_statuses.items()]
+
     try:
         mtime = os.path.getmtime('/etc/splitgate/white-list.txt')
-        ru_list_updated = str(date.fromtimestamp(mtime))
+        ru_list_updated = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M')
     except FileNotFoundError:
         ru_list_updated = None
     r3 = subprocess.run(['ip', 'route', 'show', 'dev', 'awg0'], capture_output=True, text=True, timeout=5)
     vpn_route_count = len([l for l in r3.stdout.splitlines() if l.strip()])
+    vpn_custom_count = len(read_routes_file(VPN_CUSTOM_ROUTES))
     isp_route_count = len(read_routes_file(ISP_CUSTOM_ROUTES))
     try:
         with open('/etc/splitgate/white-list.txt') as fh:
             ru_route_count = sum(1 for l in fh if l.strip() and not l.startswith('#'))
     except FileNotFoundError:
         ru_route_count = 0
-    return jsonify({'tunnel_up': tunnel_up, 'daemon_up': daemon_up, 'ru_list_updated': ru_list_updated,
-                    'vpn_route_count': vpn_route_count, 'isp_route_count': isp_route_count, 'ru_route_count': ru_route_count})
+    return jsonify({
+        'tunnel_up': tunnel_up, 'daemon_up': daemon_up,
+        'ru_list_updated': ru_list_updated,
+        'vpn_route_count': vpn_route_count, 'vpn_custom_count': vpn_custom_count,
+        'isp_route_count': isp_route_count, 'ru_route_count': ru_route_count,
+        'services': services,
+    })
 
 @app.route('/api/services')
 @require_auth
@@ -203,6 +215,22 @@ def api_service_action(name, action):
     if r.returncode == 0:
         return jsonify({'ok': True})
     return jsonify({'error': r.stderr.strip()}), 500
+
+@app.route('/api/services/bulk/<action>', methods=['POST'])
+@require_auth
+def api_services_bulk(action):
+    if action not in ('start', 'stop', 'restart'):
+        return jsonify({'error': 'Unknown action'}), 400
+    targets = [n for n in MANAGED_SERVICES if n != 'splitgate-admin']
+    errors = []
+    for name in targets:
+        unit = SERVICE_UNIT_MAP[name]
+        r = subprocess.run(['systemctl', action, unit], capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            errors.append(f'{name}: {r.stderr.strip()}')
+    if errors:
+        return jsonify({'ok': False, 'errors': errors}), 500
+    return jsonify({'ok': True})
 
 # ── Routes: VPN ──────────────────────────────────────────────────────────────
 
@@ -414,14 +442,24 @@ def api_logs_watch():
 @app.route('/api/logs/history')
 @require_auth
 def api_logs_history():
-    date_str = request.args.get('date', '')
+    from_str = request.args.get('from', '')
+    to_str = request.args.get('to', from_str)
     try:
-        datetime.strptime(date_str, '%Y-%m-%d')
+        from_date = datetime.strptime(from_str, '%Y-%m-%d').date()
+        to_date = datetime.strptime(to_str, '%Y-%m-%d').date()
     except ValueError:
         return jsonify({'error': 'Invalid date format, use YYYY-MM-DD'}), 400
-    log_path = f'{LOG_DIR}/watch-{date_str}.log'
-    lines = tail_file(log_path, n=5000)
-    return jsonify({'lines': lines, 'date': date_str, 'found': len(lines) > 0})
+    if to_date < from_date:
+        return jsonify({'error': 'End date must be >= start date'}), 400
+    if (to_date - from_date).days > 30:
+        return jsonify({'error': 'Date range too large (max 30 days)'}), 400
+    all_lines = []
+    current = from_date
+    while current <= to_date:
+        log_path = f'{LOG_DIR}/watch-{current.strftime("%Y-%m-%d")}.log'
+        all_lines.extend(tail_file(log_path, n=5000))
+        current += timedelta(days=1)
+    return jsonify({'lines': all_lines, 'count': len(all_lines)})
 
 @app.route('/api/logs/install')
 @require_auth
