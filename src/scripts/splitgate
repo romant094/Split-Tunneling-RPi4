@@ -105,8 +105,65 @@ case "$CMD" in
     fi
     exec sudo "$SPLITGATE_DIR/update-vpn-routes" "$@"
     ;;
+  admin)
+    ADMIN_ACTION="${1:-}"
+    shift || true
+    case "$ADMIN_ACTION" in
+      status)
+        if $has_help; then
+          echo "splitgate admin status — show splitgate-admin.service state"
+          echo ""
+          echo "Usage: splitgate admin status"
+          echo ""
+          echo "  Reports whether the web admin interface service is active."
+          echo "  Access the admin interface at http://192.168.1.254:8080"
+          exit 0
+        fi
+        exec sudo systemctl is-active splitgate-admin.service
+        ;;
+      start)
+        if $has_help; then
+          echo "splitgate admin start — start the splitgate web admin service"
+          echo ""
+          echo "Usage: splitgate admin start"
+          exit 0
+        fi
+        exec sudo systemctl start splitgate-admin.service
+        ;;
+      stop)
+        if $has_help; then
+          echo "splitgate admin stop — stop the splitgate web admin service"
+          echo ""
+          echo "Usage: splitgate admin stop"
+          exit 0
+        fi
+        exec sudo systemctl stop splitgate-admin.service
+        ;;
+      restart)
+        if $has_help; then
+          echo "splitgate admin restart — restart the splitgate web admin service"
+          echo ""
+          echo "Usage: splitgate admin restart"
+          exit 0
+        fi
+        exec sudo systemctl restart splitgate-admin.service
+        ;;
+      *)
+        echo "Usage: splitgate admin {status|start|stop|restart}"
+        echo "       splitgate admin <subcommand> /? — per-subcommand help"
+        echo ""
+        echo "  status   — show service state"
+        echo "  start    — start the admin web interface"
+        echo "  stop     — stop the admin web interface"
+        echo "  restart  — restart the admin web interface"
+        echo ""
+        echo "  Admin interface runs at http://192.168.1.254:8080 when active."
+        exit 1
+        ;;
+    esac
+    ;;
   *)
-    echo "Usage: splitgate {status|watch|rollback|routing|update} [args...]"
+    echo "Usage: splitgate {status|watch|rollback|routing|update|admin} [args...]"
     echo "       splitgate <command> /? — per-command help"
     exit 1
     ;;

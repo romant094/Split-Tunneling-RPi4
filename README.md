@@ -195,3 +195,38 @@ ssh pi4 "sudo grep vpn-routes /etc/splitgate/logs/install.log | tail -10"
 # View today's watch log
 ssh pi4 "sudo tail -f /etc/splitgate/logs/watch-$(date +%F).log"
 ```
+
+---
+
+## Web Admin Interface
+
+A browser-based admin UI runs on the RPi at **http://192.168.1.254:8080**.
+
+**Deploy:**
+```bash
+cd src/admin && npm run build && cd ../..
+bash src/deploy.sh
+```
+
+**Access:** Open http://192.168.1.254:8080 from any LAN device. Enter the admin password when prompted.
+
+**Default password:** `admin` — change it on the Settings page or:
+```bash
+echo 'NEWPASSWORD' | ssh pi4 "sudo tee /etc/splitgate/admin.secret"
+```
+
+**Pages:**
+- **Dashboard** — VPN tunnel status, daemon state, RU list age, route counts (auto-refreshes 10s)
+- **Services** — start/stop/restart awg0, splitgate-watch, networking, dnsmasq
+- **Routes** — add/remove CIDRs in vpn-routes-custom.txt and isp-routes-custom.txt; Apply button reloads routes
+- **Logs** — Watch Live (real-time SSE stream), Install Log, Watch Errors, System Journal
+- **Config** — edit ru-list-exclude.txt; trigger manual RU list refresh
+- **Settings** — edit /etc/splitgate/vpn-gateway.env and AWG config; change admin password; Rollback
+
+**CLI management:**
+```bash
+splitgate admin status    # check if admin service is running
+splitgate admin start
+splitgate admin stop
+splitgate admin restart
+```

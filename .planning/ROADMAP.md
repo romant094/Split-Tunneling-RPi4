@@ -387,6 +387,16 @@ Plans:
 
 - [ ] 15-04-PLAN.md — splitgate admin subcommand (status/start/stop/restart) + README.md Web Admin section + docs/REFERENCE.md full API table + docs/README.ru.md Russian translation + .planning/STATE.md Phase 15 decisions [WEB-05, WEB-06]
 
+### Phase 16: Backups
+
+**Goal:** Automated backup of config (/etc/splitgate/), keys-excluded state, and route lists — restorable without full redeploy.
+**Requirements**: TBD
+**Depends on:** Phase 15
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 16 to break down)
+
 ---
 *Created: 2026-05-18*
 *Updated: 2026-06-30 — Phase 15 plans finalized: React SPA + Flask backend, 4 plans, 3 waves*

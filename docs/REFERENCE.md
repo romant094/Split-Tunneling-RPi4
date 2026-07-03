@@ -829,6 +829,7 @@ ssh pi4 "sudo /etc/splitgate/routing.sh"
 | 11 | README Documentation Overhaul | Trim README to 3 quick-start sections; all technical detail in docs/REFERENCE.md | [.planning/phases/11-readme-documentation/](../.planning/phases/11-readme-documentation/) |
 | 12 | Buffered ASN Output | Buffer watch-routes.py lines until ASN lookup completes; flush after 6 s on stall | [.planning/phases/12-buffered-asn-output/](../.planning/phases/12-buffered-asn-output/) |
 | 13 | Log Monitoring, Routing Refinement & Daemon | splitgate-watch.service daemon with ✓/✗ conntrack status; install.log rename; ru-list-exclude.txt rename; 11 RU CIDRs added to isp-routes-custom.txt | [.planning/phases/13-log-monitoring-daemon/](../.planning/phases/13-log-monitoring-daemon/) |
+| 15 | Web Admin Interface | React SPA + Flask backend; browser UI at http://192.168.1.254:8080; splitgate admin subcommand | [.planning/phases/15-web-admin-interface/](../.planning/phases/15-web-admin-interface/) |
 
 ### Quick Tasks
 
@@ -837,3 +838,108 @@ ssh pi4 "sudo /etc/splitgate/routing.sh"
 | 260521-jex | Add `scripts/watch-routes.py` — real-time iptables log enricher with rDNS caching | cf6bafa |
 | 260523-nmr | Fix NM carrier-change route flush — add NM dispatcher (`10-vpn-routes`) + fallback rebuild in `update-vpn-routes` | 847ff31 |
 | 260603-f8c | Add `src/deploy-routes.sh` — fast custom-routes-only deploy (SCP isp/vpn-routes-custom.txt + routing.sh --no-update) | 0d0bec6 |
+
+---
+
+## Phase 15: Web Admin Interface
+
+Flask backend (`/usr/local/bin/splitgate-admin`) serves a React SPA from `/etc/splitgate/admin/`.
+Runs as root under systemd (`splitgate-admin.service`) on port `ADMIN_PORT` (default 8080).
+Auth: HTTP Basic Auth; password stored in `/etc/splitgate/admin.secret` (plain text, mode 600).
+
+### Configuration
+
+| Variable | Location | Default | Description |
+|----------|----------|---------|-------------|
+| ADMIN_PORT | /etc/splitgate/vpn-gateway.env | 8080 | Flask listen port |
+
+### Files on RPi
+
+| Path | Description |
+|------|-------------|
+| /usr/local/bin/splitgate-admin | Flask backend script |
+| /etc/splitgate/admin/ | React SPA built dist (index.html + assets/) |
+| /etc/splitgate/admin.secret | Admin password (plain text, mode 600 root:root) |
+| /etc/systemd/system/splitgate-admin.service | systemd unit |
+| /etc/splitgate/logs/admin-error.log | Flask stderr log |
+
+### API Endpoints
+
+All endpoints require HTTP Basic Auth. JSON request/response unless noted.
+
+#### Dashboard
+
+| Method | Path | Description | Response |
+|--------|------|-------------|----------|
+| GET | /api/status | Gateway status overview | {tunnel_up, daemon_up, ru_list_updated, vpn_route_count, isp_route_count, ru_route_count} |
+
+#### Services
+
+| Method | Path | Description | Response |
+|--------|------|-------------|----------|
+| GET | /api/services | List service states | [{name, status}] — status: active/inactive/failed/unknown |
+| POST | /api/services/{name}/{action} | Control service | 200 {ok:true} or 500 {error} — action: start/stop/restart |
+
+#### Routes
+
+| Method | Path | Description | Body / Response |
+|--------|------|-------------|-----------------|
+| GET | /api/routes/vpn | List VPN force-routes | {routes: [cidr, ...]} |
+| POST | /api/routes/vpn | Add VPN CIDR | {cidr: "x.x.x.x/n"} — 201 ok, 400 invalid, 409 duplicate |
+| DELETE | /api/routes/vpn | Remove VPN CIDR | {cidr: "x.x.x.x/n"} — 200 ok |
+| GET | /api/routes/isp | List ISP exception routes | same |
+| POST | /api/routes/isp | Add ISP CIDR | same as vpn |
+| DELETE | /api/routes/isp | Remove ISP CIDR | same as vpn |
+| POST | /api/config/apply | Apply routes (routing.sh --no-update) | 200 {ok:true} or 500 {error} |
+
+#### Logs
+
+| Method | Path | Description | Response |
+|--------|------|-------------|----------|
+| GET | /api/logs/watch | Live SSE stream from watch-YYYY-MM-DD.log | text/event-stream — "data: LINE\n\n" |
+| GET | /api/logs/install | Last 500 lines of install.log | {lines: [...]} |
+| GET | /api/logs/watch-errors | Last 200 lines of watch-error.log | {lines: [...]} |
+| GET | /api/logs/journal | journalctl -u splitgate-watch -u awg0 -n 200 | {lines: [...]} |
+
+#### Config
+
+| Method | Path | Description | Body / Response |
+|--------|------|-------------|-----------------|
+| GET | /api/config/exclude | Read ru-list-exclude.txt | {content: str} |
+| PUT | /api/config/exclude | Write ru-list-exclude.txt | {content: str} |
+| POST | /api/config/update | Run update-vpn-routes | 200 {ok, output} or 500 {error} |
+
+#### Settings
+
+| Method | Path | Description | Body / Response |
+|--------|------|-------------|-----------------|
+| GET | /api/settings/env | Read vpn-gateway.env (secrets masked) | {vars: {KEY: value}} |
+| PUT | /api/settings/env | Write vpn-gateway.env | {vars: {KEY: value}} |
+| GET | /api/settings/secrets | Read awg0.conf key-value pairs (keys masked) | {vars: {Key: value}} |
+| PUT | /api/settings/secrets | Update awg0.conf key-value pairs | {vars: {Key: value}} |
+| POST | /api/settings/password | Change admin password | {password: str} |
+| POST | /api/settings/rollback | Run vpn-rollback.sh | {confirmation: "ROLLBACK"} — 200 initiated or 400 |
+| POST | /api/auth/logout | Clear session cookie | 200 {ok:true} |
+
+### CLI
+
+```bash
+splitgate admin status    # check service state
+splitgate admin start     # start admin service
+splitgate admin stop      # stop admin service
+splitgate admin restart   # restart admin service
+splitgate admin /?        # help
+```
+
+### Developer Workflow
+
+```bash
+# Build React SPA (macOS dev machine)
+cd src/admin && npm install && npm run build
+
+# Deploy (skips admin stages if src/admin/dist/ missing)
+cd ../.. && bash src/deploy.sh
+
+# First-time password setup
+echo 'SECURE_PASSWORD' | ssh pi4 "sudo tee /etc/splitgate/admin.secret && sudo chmod 600 /etc/splitgate/admin.secret"
+```

@@ -195,3 +195,38 @@ ssh pi4 "sudo grep vpn-routes /etc/splitgate/logs/install.log | tail -10"
 # Просмотр лога слежения за сегодня
 ssh pi4 "sudo tail -f /etc/splitgate/logs/watch-$(date +%F).log"
 ```
+
+---
+
+## Веб-интерфейс администратора
+
+Браузерный интерфейс управления запущен на RPi по адресу **http://192.168.1.254:8080**.
+
+**Деплой:**
+```bash
+cd src/admin && npm run build && cd ../..
+bash src/deploy.sh
+```
+
+**Доступ:** Откройте http://192.168.1.254:8080 с любого устройства в локальной сети. Введите пароль администратора.
+
+**Пароль по умолчанию:** `admin` — сменить на странице Settings или командой:
+```bash
+echo 'НОВЫЙ_ПАРОЛЬ' | ssh pi4 "sudo tee /etc/splitgate/admin.secret"
+```
+
+**Страницы:**
+- **Dashboard** — статус VPN-туннеля, состояние демона, возраст RU-списка, количество маршрутов (авто-обновление 10 с)
+- **Services** — запуск/остановка/перезапуск awg0, splitgate-watch, networking, dnsmasq
+- **Routes** — добавление/удаление CIDR в vpn-routes-custom.txt и isp-routes-custom.txt; кнопка Apply перезагружает маршруты
+- **Logs** — Watch Live (SSE-стрим в реальном времени), Install Log, Watch Errors, System Journal
+- **Config** — редактирование ru-list-exclude.txt; ручное обновление RU-списка
+- **Settings** — редактирование /etc/splitgate/vpn-gateway.env и конфигурации AWG; смена пароля; Rollback
+
+**Управление через CLI:**
+```bash
+splitgate admin status    # проверить, запущен ли сервис
+splitgate admin start
+splitgate admin stop
+splitgate admin restart
+```

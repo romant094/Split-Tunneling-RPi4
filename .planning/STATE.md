@@ -120,6 +120,40 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 *Initialized: 2026-05-18*
 *Updated: 2026-05-27 — Phase 8 complete; EFFECTIVE_URL exclusion filter in update-vpn-routes; Stage 21b + EXCLUDE_LIST vars in deploy.sh (TOTAL_STAGES=24); configs/ru-exclude.txt.example added*
 
+## Phase 15: Web Admin Interface
+
+**Status:** Complete (2026-07-03)
+
+### Decisions
+
+- D-01: React + Vite SPA (not vanilla JS, not embedded HTML in Python)
+- D-02: Built dist committed to repo — no Node.js on RPi, no build step at deploy time
+- D-03: src/admin/ — React project source; src/admin/dist/ — committed build output
+- D-04: Flask serves src/admin/dist/ as static files; SPA routing via React Router (hash mode)
+- D-05: deploy.sh checks for src/admin/dist/ before deploying admin UI; if absent: skip with log message
+- D-06: New conditional Stage 29 in deploy.sh for admin (after existing Stage 28 splitgate-watch)
+- D-07: Admin files deploy to /etc/splitgate/admin/ on RPi; Flask backend at /usr/local/bin/splitgate-admin
+- D-08: Python Flask (src/scripts/splitgate-admin.py) — single file, no external Python deps beyond Flask
+- D-09: Auth: HTTP Basic Auth, password stored at /etc/splitgate/admin.secret (plain text, mode 600)
+- D-10: Port: ADMIN_PORT=8080 in .env; accessible at http://192.168.1.254:8080 from LAN
+- D-11: Flask runs as root (systemd User=root) — required for systemctl and /etc/splitgate/ writes
+- D-12: Services page button state: Start disabled when active; Stop and Restart disabled when inactive
+- D-13: Logs page: 4 tabs — Watch Live (SSE), Install Log, Watch Errors, System Journal; [VPN]=cyan [ISP]=yellow
+- D-14: Settings page: edits vpn-gateway.env and awg0.conf; mask secret values; modal for Rollback
+
+### File Layout (RPi)
+
+- /usr/local/bin/splitgate-admin — Flask backend
+- /etc/splitgate/admin/ — React SPA dist (served as static)
+- /etc/splitgate/admin.secret — admin password (mode 600, root:root)
+- /etc/systemd/system/splitgate-admin.service — systemd unit
+- /etc/splitgate/logs/admin-error.log — Flask stderr
+
+### Key Packages
+
+- python3-flask (apt) — Flask on RPi
+- vite + react + react-dom + react-router-dom (npm, dev only — dist committed to repo)
+
 ## Quick Tasks Completed
 
 | # | Description | Date | Commit | Directory |
@@ -138,6 +172,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 - Phase 9 added: Operational Logging — centralized logs for diagnosing system failures; 14-day rotation
 - Phase 10 added: Splitgate Ergonomics & Organization — consolidate RPi files under /etc/splitgate/, add splitgate dispatcher CLI, move repo source into src/ subdirectory; 4 plans across 3 waves (Wave 0: src/ restructure; Wave 1: path migration + deploy.sh parallel; Wave 2: dispatcher + docs)
 - Phase 14 added: domain-based routing via dnsmasq ipset — allow domain suffixes (e.g. amazonaws.com, cloudfront.net) in isp-routes-custom.txt and vpn-routes-custom.txt alongside CIDRs; real-time DNS-triggered routing via kernel ipsets + iptables mangle marks + policy routing tables
+- Phase 16 added: Backups — automated backup of config (/etc/splitgate/), keys-excluded state, and route lists; restorable without full redeploy
 
 ### Phase 4 Post-execution Fixes (applied after plans, discovered during live testing)
 
