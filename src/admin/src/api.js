@@ -22,6 +22,15 @@ export function getAuthHeader() {
   return 'Basic ' + btoa(auth.user + ':' + auth.pass);
 }
 
+export async function checkAuth() {
+  try {
+    const r = await fetch('/api/auth/check', { credentials: 'include' });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function apiFetch(path, options = {}) {
   const resp = await fetch(path, {
     ...options,
