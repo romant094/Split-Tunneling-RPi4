@@ -290,27 +290,40 @@ echo "[7/${TOTAL_STAGES}] Deploying awg0.conf to ${SSH_HOST}:${AWG_CONF_REMOTE}.
 # Ensure target directory exists (RESEARCH.md Pitfall 4 — may not be auto-created)
 ssh "$SSH_HOST" "sudo mkdir -p /etc/amnezia/amneziawg"
 
-# SCP rendered config to /tmp staging area, then sudo mv + lock down permissions
-scp "$tmp" "${SSH_HOST}:/tmp/awg0.conf.tmp"
-ssh "$SSH_HOST" "sudo mv /tmp/awg0.conf.tmp ${AWG_CONF_REMOTE} && \
-                 sudo chmod 600 ${AWG_CONF_REMOTE} && \
-                 sudo chown root:root ${AWG_CONF_REMOTE}"
+# Skip-if-exists guard (UI-DEPLOY, RESEARCH Pitfall 2): the Settings page edits this
+# file in place on the RPi after first deploy — an unconditional overwrite here would
+# silently clobber those RPi-side edits on every redeploy.
+if ssh "$SSH_HOST" "sudo test -f ${AWG_CONF_REMOTE}"; then
+    echo "       awg0.conf already present on ${SSH_HOST} — skipping overwrite (edit via Settings page, or delete the remote file to force redeploy)"
+else
+    # SCP rendered config to /tmp staging area, then sudo mv + lock down permissions
+    scp "$tmp" "${SSH_HOST}:/tmp/awg0.conf.tmp"
+    ssh "$SSH_HOST" "sudo mv /tmp/awg0.conf.tmp ${AWG_CONF_REMOTE} && \
+                     sudo chmod 600 ${AWG_CONF_REMOTE} && \
+                     sudo chown root:root ${AWG_CONF_REMOTE}"
 
-echo "       awg0.conf deployed with chmod 600 + chown root:root (T-01-PERM)."
+    echo "       awg0.conf deployed with chmod 600 + chown root:root (T-01-PERM)."
+fi
 
 # ─── Stage H: Deploy /etc/splitgate/vpn-gateway.env to RPi (CONF-02) ────────
 echo "[8/${TOTAL_STAGES}] Deploying vpn-gateway.env to ${SSH_HOST}:${ENV_REMOTE}..."
 
-# Build merged env: public vars from .env + VPN_SERVER_IP from .env.secrets
-# VPN_SERVER_IP is kept out of .env (gitignored secret); injected here at deploy time
-cat ../.env > "$env_merged_tmp"
-printf 'VPN_SERVER_IP=%s\n' "${VPN_SERVER_IP}" >> "$env_merged_tmp"
-scp "$env_merged_tmp" "${SSH_HOST}:/tmp/vpn-gateway.env.tmp"
-ssh "$SSH_HOST" "sudo mv /tmp/vpn-gateway.env.tmp ${ENV_REMOTE} && \
-                 sudo chmod 644 ${ENV_REMOTE} && \
-                 sudo chown root:root ${ENV_REMOTE}"
+# Skip-if-exists guard (UI-DEPLOY, RESEARCH Pitfall 3): same rationale as Stage G —
+# the Settings page is the source of truth for this file once it exists on the RPi.
+if ssh "$SSH_HOST" "sudo test -f ${ENV_REMOTE}"; then
+    echo "       vpn-gateway.env already present — skipping overwrite (edit via Settings page)"
+else
+    # Build merged env: public vars from .env + VPN_SERVER_IP from .env.secrets
+    # VPN_SERVER_IP is kept out of .env (gitignored secret); injected here at deploy time
+    cat ../.env > "$env_merged_tmp"
+    printf 'VPN_SERVER_IP=%s\n' "${VPN_SERVER_IP}" >> "$env_merged_tmp"
+    scp "$env_merged_tmp" "${SSH_HOST}:/tmp/vpn-gateway.env.tmp"
+    ssh "$SSH_HOST" "sudo mv /tmp/vpn-gateway.env.tmp ${ENV_REMOTE} && \
+                     sudo chmod 644 ${ENV_REMOTE} && \
+                     sudo chown root:root ${ENV_REMOTE}"
 
-echo "       vpn-gateway.env deployed (mode 644, root:root)."
+    echo "       vpn-gateway.env deployed (mode 644, root:root)."
+fi
 
 # ─── Stage I: Post-deploy verification ──────────────────────────────────────
 echo "[9/${TOTAL_STAGES}] Running post-deploy verification on ${SSH_HOST}..."
