@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { HashRouter, Routes, Route, NavLink } from 'react-router-dom'
 import { Shield, LayoutDashboard, Server, Route as RouteIcon, FileText, Settings2, Cog, LogOut, Menu, X } from 'lucide-react'
-import { setAuth, clearAuth, apiFetch, apiLogout } from './api'
+import { setAuth, clearAuth, apiFetch, apiLogout, checkAuth } from './api'
 import { subscribeMeta } from './logStream'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -126,18 +126,34 @@ function NavItems({ onNav }) {
 }
 
 export default function App() {
-  const [loggedIn, setLoggedIn] = useState(!!sessionStorage.getItem('sg_auth'))
+  const [authState, setAuthState] = useState('checking')
   const [mobileOpen, setMobileOpen] = useState(false)
   const [logBgMode, setLogBgMode] = useState(false)
 
   useEffect(() => subscribeMeta(s => setLogBgMode(s.bgMode)), [])
 
+  useEffect(() => {
+    checkAuth().then(ok => setAuthState(ok ? 'in' : 'out'))
+  }, [])
+
   async function handleLogout() {
     await apiLogout()
-    setLoggedIn(false)
+    setAuthState('out')
   }
 
-  if (!loggedIn) return <LoginForm onLogin={() => setLoggedIn(true)} />
+  if (authState === 'checking') {
+    return (
+      <div className="min-h-screen flex items-center justify-center"
+        style={{ background: 'radial-gradient(ellipse at 50% 35%, hsl(122 20% 8%) 0%, hsl(0 0% 6%) 65%)' }}>
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <Shield className="h-8 w-8 text-primary animate-pulse" />
+          <span className="text-xs uppercase tracking-widest">Loading…</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (authState === 'out') return <LoginForm onLogin={() => setAuthState('in')} />
 
   return (
     <HashRouter>
