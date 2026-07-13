@@ -399,11 +399,26 @@ Plans:
 - UI-BACKUP: Export/download current ISP + VPN custom route lists as a backup file.
 - UI-DEPLOY: deploy.sh must not overwrite existing config files on redeploy — preserve local edits.
 **Depends on:** Phase 15
-**Plans:** 0 plans
+**Plans:** 7 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 16 to break down)
+
+**Wave 1 (parallel — disjoint files):**
+
+- [ ] 16-01-PLAN.md — Backend endpoints in splitgate-admin.py: /api/auth/check + Max-Age cookie, /api/routes/backup, /api/diag/{whois,traceroute,route-match} [UI-AUTH, UI-BACKUP, UI-DIAG, UI-ADDROUTE]
+- [ ] 16-02-PLAN.md — deploy.sh non-destructive redeploy (skip existing env/awg0.conf) + traceroute apt-install stage + docs sync [UI-DEPLOY, UI-DIAG]
+- [ ] 16-03-PLAN.md — Frontend auth persistence: api.js checkAuth() probe + App.jsx tri-state mount gate [UI-AUTH]
+- [ ] 16-04-PLAN.md — Resources card progress bars: new Progress component + Dashboard.jsx CPU/RAM/Disk bars [UI-RESOURCES]
+
+**Wave 2 (after Wave 1):**
+
+- [ ] 16-05-PLAN.md — routeStaging.js shared store + DiffPreview.jsx + Routes.jsx diff-preview/auto-org-lookup/backup button [UI-ADDROUTE, UI-BACKUP, UI-LOGS] (depends 16-01)
+- [ ] 16-06-PLAN.md — Diagnostics.jsx page (whois/traceroute/route-match) + App.jsx route/nav [UI-DIAG] (depends 16-01, 16-03)
+
+**Wave 3 (after Wave 2):**
+
+- [ ] 16-07-PLAN.md — Logs.jsx UX: dedupe toggle, hover highlight, right-click context menu, multi-select batch-add, human timestamps, ✓/✗ legend [UI-LOGS] (depends 16-05)
 
 ---
 *Created: 2026-05-18*
-*Updated: 2026-07-11 — Phase 16 redefined from generic "Backups" to Web Admin UX Upgrade batch, per user feature list*
+*Updated: 2026-07-13 — Phase 16 planned: 7 plans across 3 waves*
