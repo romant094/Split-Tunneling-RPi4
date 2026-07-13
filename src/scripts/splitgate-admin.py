@@ -57,9 +57,23 @@ def require_auth(f):
         _sessions.add(session_token)
         inner_result = f(*args, **kwargs)
         resp = make_response(inner_result)
-        resp.set_cookie('sg_session', session_token, httponly=True, samesite='Strict', path='/')
+        # 30-day Max-Age so the cookie survives browser restarts (D-01: Phase 15 D-09
+        # cookie had no expiry, forcing re-auth on every new tab/restart).
+        resp.set_cookie('sg_session', session_token, httponly=True, samesite='Strict',
+                         path='/', max_age=60*60*24*30)
         return resp
     return decorated
+
+
+@app.route('/api/auth/check')
+def api_auth_check():
+    # _sessions is in-memory and resets on service restart (Pitfall 5) — this endpoint
+    # reports current validity only, not a guarantee of persistence across restarts.
+    # Intentionally does NOT use @require_auth: must not trigger a Basic Auth challenge.
+    token = request.cookies.get('sg_session')
+    if token and token in _sessions:
+        return jsonify({'authenticated': True})
+    return jsonify({'authenticated': False}), 401
 
 
 def strip_env_quotes(v):
