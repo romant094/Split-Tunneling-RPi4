@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase 13 complete — all 4 plans executed (routing config, renames, daemon, docs)
-stopped_at: Phase 13 Plan 04 complete — docs updated; all 32 plans done across 13 phases
-last_updated: "2026-05-29T00:00:00Z"
+status: completed
+stopped_at: Quick task 260603-f8c complete — deploy-routes.sh added; docs updated
+last_updated: "2026-07-11T10:54:28.396Z"
 progress:
-  total_phases: 13
+  total_phases: 16
   completed_phases: 13
-  total_plans: 32
-  completed_plans: 32
-  percent: 100
+  total_plans: 35
+  completed_plans: 34
+  percent: 81
 ---
 
 # State: RPi VPN Gateway
@@ -173,6 +173,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 - Phase 10 added: Splitgate Ergonomics & Organization — consolidate RPi files under /etc/splitgate/, add splitgate dispatcher CLI, move repo source into src/ subdirectory; 4 plans across 3 waves (Wave 0: src/ restructure; Wave 1: path migration + deploy.sh parallel; Wave 2: dispatcher + docs)
 - Phase 14 added: domain-based routing via dnsmasq ipset — allow domain suffixes (e.g. amazonaws.com, cloudfront.net) in isp-routes-custom.txt and vpn-routes-custom.txt alongside CIDRs; real-time DNS-triggered routing via kernel ipsets + iptables mangle marks + policy routing tables
 - Phase 16 added: Backups — automated backup of config (/etc/splitgate/), keys-excluded state, and route lists; restorable without full redeploy
+- Phase 16 edited: redefined from Backups to Web Admin UX Upgrade (7 requirements: UI-LOGS/AUTH/RESOURCES/DIAG/ADDROUTE/BACKUP/DEPLOY)
 
 ### Phase 4 Post-execution Fixes (applied after plans, discovered during live testing)
 

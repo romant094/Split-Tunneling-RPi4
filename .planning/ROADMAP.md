@@ -387,10 +387,17 @@ Plans:
 
 - [ ] 15-04-PLAN.md — splitgate admin subcommand (status/start/stop/restart) + README.md Web Admin section + docs/REFERENCE.md full API table + docs/README.ru.md Russian translation + .planning/STATE.md Phase 15 decisions [WEB-05, WEB-06]
 
-### Phase 16: Backups
+### Phase 16: Web Admin UX Upgrade
 
-**Goal:** Automated backup of config (/etc/splitgate/), keys-excluded state, and route lists — restorable without full redeploy.
-**Requirements**: TBD
+**Goal:** Upgrade the Web Admin Interface (Phase 15) for daily usability — smarter log viewing, persistent auth sessions, resource visualization, a network diagnostics page, ownership-aware route entry, route list backup/export, and safe redeploys that don't clobber configs.
+**Requirements**:
+- UI-LOGS: Logs page gets a "hide duplicate" filter (collapses/hides consecutive identical log lines like repeated ISP/VPN hits to the same IP+port), row hover highlight, right-click context menu (Copy / Add route to ISP list / Add route to VPN list), multi-select + batch add-to-exceptions, human-readable timestamp format, and an inline legend explaining the ✓/✗ icons shown right after the [VPN]/[ISP] tag.
+- UI-AUTH: Login session persists across page loads/navigation instead of re-prompting for the password every time.
+- UI-RESOURCES: CPU/RAM/disk on the Resources page show progress bars, not just numbers; evaluate whether 1s refresh interval is worth the added load vs current cadence.
+- UI-DIAG: New Diagnostics page — IP whois/ASN lookup, traceroute, and a route-match checker (shows whether a given CIDR would route via VPN or ISP based on current route lists).
+- UI-ADDROUTE: Add Route form auto-detects the subnet's owning org (whois/ASN) and pre-fills the route comment.
+- UI-BACKUP: Export/download current ISP + VPN custom route lists as a backup file.
+- UI-DEPLOY: deploy.sh must not overwrite existing config files on redeploy — preserve local edits.
 **Depends on:** Phase 15
 **Plans:** 0 plans
 
@@ -399,4 +406,4 @@ Plans:
 
 ---
 *Created: 2026-05-18*
-*Updated: 2026-06-30 — Phase 15 plans finalized: React SPA + Flask backend, 4 plans, 3 waves*
+*Updated: 2026-07-11 — Phase 16 redefined from generic "Backups" to Web Admin UX Upgrade batch, per user feature list*
