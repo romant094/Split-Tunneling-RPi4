@@ -520,6 +520,22 @@ def api_logs_journal():
                        capture_output=True, text=True, timeout=15)
     return jsonify({'lines': r.stdout.splitlines()})
 
+@app.route('/api/routes/backup')
+@require_auth
+def api_routes_backup():
+    parts = []
+    parts.append('# splitgate route backup — ' + date.today().isoformat())
+    parts.append('# --- VPN routes (vpn-routes-custom.txt) ---')
+    for e in read_routes_with_desc(VPN_CUSTOM_ROUTES):
+        parts.append(f"{e['cidr']} # {e['description']}" if e['description'] else e['cidr'])
+    parts.append('# --- ISP routes (isp-routes-custom.txt) ---')
+    for e in read_routes_with_desc(ISP_CUSTOM_ROUTES):
+        parts.append(f"{e['cidr']} # {e['description']}" if e['description'] else e['cidr'])
+    content = '\n'.join(parts) + '\n'
+    filename = f"splitgate-routes-backup-{date.today().isoformat()}.txt"
+    return Response(content, mimetype='text/plain',
+                     headers={'Content-Disposition': f'attachment; filename={filename}'})
+
 # ── Settings: env / AWG config / password / rollback ─────────────────────────
 
 @app.route('/api/settings/env')
