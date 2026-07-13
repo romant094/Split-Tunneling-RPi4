@@ -98,7 +98,7 @@ ADMIN_DIST_LOCAL="admin/dist"
 ADMIN_DIST_REMOTE="/etc/splitgate/admin"
 ADMIN_SECRET_REMOTE="/etc/splitgate/admin.secret"
 
-TOTAL_STAGES=29
+TOTAL_STAGES=30
 
 # ─── Argument Parsing (D-12) ─────────────────────────────────────────────────
 RUN_ROUTING=true
@@ -290,27 +290,40 @@ echo "[7/${TOTAL_STAGES}] Deploying awg0.conf to ${SSH_HOST}:${AWG_CONF_REMOTE}.
 # Ensure target directory exists (RESEARCH.md Pitfall 4 — may not be auto-created)
 ssh "$SSH_HOST" "sudo mkdir -p /etc/amnezia/amneziawg"
 
-# SCP rendered config to /tmp staging area, then sudo mv + lock down permissions
-scp "$tmp" "${SSH_HOST}:/tmp/awg0.conf.tmp"
-ssh "$SSH_HOST" "sudo mv /tmp/awg0.conf.tmp ${AWG_CONF_REMOTE} && \
-                 sudo chmod 600 ${AWG_CONF_REMOTE} && \
-                 sudo chown root:root ${AWG_CONF_REMOTE}"
+# Skip-if-exists guard (UI-DEPLOY, RESEARCH Pitfall 2): the Settings page edits this
+# file in place on the RPi after first deploy — an unconditional overwrite here would
+# silently clobber those RPi-side edits on every redeploy.
+if ssh "$SSH_HOST" "sudo test -f ${AWG_CONF_REMOTE}"; then
+    echo "       awg0.conf already present on ${SSH_HOST} — skipping overwrite (edit via Settings page, or delete the remote file to force redeploy)"
+else
+    # SCP rendered config to /tmp staging area, then sudo mv + lock down permissions
+    scp "$tmp" "${SSH_HOST}:/tmp/awg0.conf.tmp"
+    ssh "$SSH_HOST" "sudo mv /tmp/awg0.conf.tmp ${AWG_CONF_REMOTE} && \
+                     sudo chmod 600 ${AWG_CONF_REMOTE} && \
+                     sudo chown root:root ${AWG_CONF_REMOTE}"
 
-echo "       awg0.conf deployed with chmod 600 + chown root:root (T-01-PERM)."
+    echo "       awg0.conf deployed with chmod 600 + chown root:root (T-01-PERM)."
+fi
 
 # ─── Stage H: Deploy /etc/splitgate/vpn-gateway.env to RPi (CONF-02) ────────
 echo "[8/${TOTAL_STAGES}] Deploying vpn-gateway.env to ${SSH_HOST}:${ENV_REMOTE}..."
 
-# Build merged env: public vars from .env + VPN_SERVER_IP from .env.secrets
-# VPN_SERVER_IP is kept out of .env (gitignored secret); injected here at deploy time
-cat ../.env > "$env_merged_tmp"
-printf 'VPN_SERVER_IP=%s\n' "${VPN_SERVER_IP}" >> "$env_merged_tmp"
-scp "$env_merged_tmp" "${SSH_HOST}:/tmp/vpn-gateway.env.tmp"
-ssh "$SSH_HOST" "sudo mv /tmp/vpn-gateway.env.tmp ${ENV_REMOTE} && \
-                 sudo chmod 644 ${ENV_REMOTE} && \
-                 sudo chown root:root ${ENV_REMOTE}"
+# Skip-if-exists guard (UI-DEPLOY, RESEARCH Pitfall 3): same rationale as Stage G —
+# the Settings page is the source of truth for this file once it exists on the RPi.
+if ssh "$SSH_HOST" "sudo test -f ${ENV_REMOTE}"; then
+    echo "       vpn-gateway.env already present — skipping overwrite (edit via Settings page)"
+else
+    # Build merged env: public vars from .env + VPN_SERVER_IP from .env.secrets
+    # VPN_SERVER_IP is kept out of .env (gitignored secret); injected here at deploy time
+    cat ../.env > "$env_merged_tmp"
+    printf 'VPN_SERVER_IP=%s\n' "${VPN_SERVER_IP}" >> "$env_merged_tmp"
+    scp "$env_merged_tmp" "${SSH_HOST}:/tmp/vpn-gateway.env.tmp"
+    ssh "$SSH_HOST" "sudo mv /tmp/vpn-gateway.env.tmp ${ENV_REMOTE} && \
+                     sudo chmod 644 ${ENV_REMOTE} && \
+                     sudo chown root:root ${ENV_REMOTE}"
 
-echo "       vpn-gateway.env deployed (mode 644, root:root)."
+    echo "       vpn-gateway.env deployed (mode 644, root:root)."
+fi
 
 # ─── Stage I: Post-deploy verification ──────────────────────────────────────
 echo "[9/${TOTAL_STAGES}] Running post-deploy verification on ${SSH_HOST}..."
@@ -394,27 +407,32 @@ echo "[17/${TOTAL_STAGES}] Ensuring dnsmasq is installed on ${SSH_HOST}..."
 ssh -o BatchMode=yes "${SSH_HOST}" "if ! dpkg -l dnsmasq 2>/dev/null | grep -q '^ii'; then sudo DEBIAN_FRONTEND=noninteractive apt-get install -y dnsmasq; fi"
 echo "       dnsmasq installed (or already present)."
 
+# ─── Stage 18b: Ensure traceroute is installed (UI-DIAG dependency) ─────────
+echo "[18/${TOTAL_STAGES}] Ensuring traceroute is installed on ${SSH_HOST}..."
+ssh -o BatchMode=yes "${SSH_HOST}" "if ! dpkg -l traceroute 2>/dev/null | grep -q '^ii'; then sudo DEBIAN_FRONTEND=noninteractive apt-get install -y traceroute; fi"
+echo "       traceroute installed (or already present)."
+
 # ─── Stage 19: Deploy dnsmasq.conf to RPi (D-18) ────────────────────────────
 # Overwrite package default with our config now that the package is installed.
-echo "[18/${TOTAL_STAGES}] Deploying dnsmasq.conf to ${SSH_HOST}:${DNSMASQ_CONF_REMOTE}..."
+echo "[19/${TOTAL_STAGES}] Deploying dnsmasq.conf to ${SSH_HOST}:${DNSMASQ_CONF_REMOTE}..."
 scp -o BatchMode=yes "${DNSMASQ_CONF_LOCAL}" "${SSH_HOST}:${DNSMASQ_CONF_TMP}"
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${DNSMASQ_CONF_TMP} ${DNSMASQ_CONF_REMOTE} && sudo chmod 644 ${DNSMASQ_CONF_REMOTE} && sudo chown root:root ${DNSMASQ_CONF_REMOTE} && sudo systemctl enable --now dnsmasq"
 echo "       dnsmasq.conf deployed (mode 644, root:root); dnsmasq enabled and started."
 
 # ─── Stage 20: Deploy vpn-status.sh to RPi (D-19) ───────────────────────────
-echo "[19/${TOTAL_STAGES}] Deploying vpn-status.sh to ${SSH_HOST}:${VPN_STATUS_REMOTE}..."
+echo "[20/${TOTAL_STAGES}] Deploying vpn-status.sh to ${SSH_HOST}:${VPN_STATUS_REMOTE}..."
 scp -o BatchMode=yes "${VPN_STATUS_LOCAL}" "${SSH_HOST}:${VPN_STATUS_TMP}"
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${VPN_STATUS_TMP} ${VPN_STATUS_REMOTE} && sudo chmod +x ${VPN_STATUS_REMOTE} && sudo chown root:root ${VPN_STATUS_REMOTE}"
 echo "       vpn-status.sh deployed (chmod +x, root:root)."
 
 # ─── Stage 21: Deploy watch-routes.py to RPi ────────────────────────────────
-echo "[20/${TOTAL_STAGES}] Deploying watch-routes.py to ${SSH_HOST}:${WATCH_ROUTES_REMOTE}..."
+echo "[21/${TOTAL_STAGES}] Deploying watch-routes.py to ${SSH_HOST}:${WATCH_ROUTES_REMOTE}..."
 scp -o BatchMode=yes "${WATCH_ROUTES_LOCAL}" "${SSH_HOST}:${WATCH_ROUTES_TMP}"
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${WATCH_ROUTES_TMP} ${WATCH_ROUTES_REMOTE} && sudo chmod +x ${WATCH_ROUTES_REMOTE} && sudo chown root:root ${WATCH_ROUTES_REMOTE}"
 echo "       watch-routes.py deployed (chmod +x, root:root)."
 
 # ─── Stage 22: Deploy isp-routes-custom.txt to RPi (D-05) ───────────────────
-echo "[21/${TOTAL_STAGES}] Deploying isp-routes-custom.txt to ${SSH_HOST} (if present)..."
+echo "[22/${TOTAL_STAGES}] Deploying isp-routes-custom.txt to ${SSH_HOST} (if present)..."
 if [[ -f "${ISP_CUSTOM_LOCAL}" ]]; then
     scp -o BatchMode=yes "${ISP_CUSTOM_LOCAL}" "${SSH_HOST}:${ISP_CUSTOM_TMP}"
     ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${ISP_CUSTOM_TMP} ${ISP_CUSTOM_REMOTE} && sudo chmod 644 ${ISP_CUSTOM_REMOTE} && sudo chown root:root ${ISP_CUSTOM_REMOTE}"
@@ -424,7 +442,7 @@ else
 fi
 
 # ─── Stage 22b: Deploy vpn-routes-custom.txt to RPi (D-05) ──────────────────
-echo "[21b/${TOTAL_STAGES}] Deploying vpn-routes-custom.txt to ${SSH_HOST} (if present)..."
+echo "[22b/${TOTAL_STAGES}] Deploying vpn-routes-custom.txt to ${SSH_HOST} (if present)..."
 if [[ -f "${VPN_FORCE_LOCAL}" ]]; then
     scp -o BatchMode=yes "${VPN_FORCE_LOCAL}" "${SSH_HOST}:${VPN_FORCE_TMP}"
     ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${VPN_FORCE_TMP} ${VPN_FORCE_REMOTE} && sudo chmod 644 ${VPN_FORCE_REMOTE} && sudo chown root:root ${VPN_FORCE_REMOTE}"
@@ -434,7 +452,7 @@ else
 fi
 
 # ─── Stage 22c: Deploy ru-list-exclude.txt to RPi (D-07, D-08) ──────────────
-echo "[21c/${TOTAL_STAGES}] Deploying ru-list-exclude.txt to ${SSH_HOST} (if present)..."
+echo "[22c/${TOTAL_STAGES}] Deploying ru-list-exclude.txt to ${SSH_HOST} (if present)..."
 if [[ -f "${EXCLUDE_LIST_LOCAL}" ]]; then
     ssh -o BatchMode=yes "${SSH_HOST}" "[ -f /etc/splitgate/ru-exclude.txt ] && sudo mv /etc/splitgate/ru-exclude.txt /etc/splitgate/ru-list-exclude.txt || true"
     scp -o BatchMode=yes "${EXCLUDE_LIST_LOCAL}" "${SSH_HOST}:${EXCLUDE_LIST_TMP}"
@@ -445,23 +463,23 @@ else
 fi
 
 # ─── Stage 23: Deploy NM dispatcher for carrier-change route recovery ────────
-echo "[22/${TOTAL_STAGES}] Deploying NM dispatcher ${NM_DISPATCHER_LOCAL} to ${SSH_HOST}:${NM_DISPATCHER_REMOTE}..."
+echo "[23/${TOTAL_STAGES}] Deploying NM dispatcher ${NM_DISPATCHER_LOCAL} to ${SSH_HOST}:${NM_DISPATCHER_REMOTE}..."
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo mkdir -p /etc/NetworkManager/dispatcher.d"
 scp -o BatchMode=yes "${NM_DISPATCHER_LOCAL}" "${SSH_HOST}:${NM_DISPATCHER_TMP}"
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${NM_DISPATCHER_TMP} ${NM_DISPATCHER_REMOTE} && sudo chmod 755 ${NM_DISPATCHER_REMOTE} && sudo chown root:root ${NM_DISPATCHER_REMOTE}"
 echo "       10-vpn-routes deployed (chmod 755, root:root) — restores routes on eth0 up events."
 
-# ─── Stage 23: Deploy asn-lookup.py to RPi (Phase 7) ────────────────────────
-echo "[23/${TOTAL_STAGES}] Deploying asn-lookup.py to ${SSH_HOST}:${ASN_LOOKUP_REMOTE}..."
+# ─── Stage 24: Deploy asn-lookup.py to RPi (Phase 7) ────────────────────────
+echo "[24/${TOTAL_STAGES}] Deploying asn-lookup.py to ${SSH_HOST}:${ASN_LOOKUP_REMOTE}..."
 scp -o BatchMode=yes "${ASN_LOOKUP_LOCAL}" "${SSH_HOST}:${ASN_LOOKUP_TMP}"
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${ASN_LOOKUP_TMP} ${ASN_LOOKUP_REMOTE} && sudo chmod +x ${ASN_LOOKUP_REMOTE} && sudo chown root:root ${ASN_LOOKUP_REMOTE}"
 echo "       asn-lookup.py deployed (chmod +x, root:root)."
 
-# ─── Stage 24: Bring up VPN tunnel + Activate routing.sh (D-12, D-18, D-04, D-06/P5) ──
+# ─── Stage 25: Bring up VPN tunnel + Activate routing.sh (D-12, D-18, D-04, D-06/P5) ──
 # Single routing.sh run — after all config files (ru-list-exclude.txt, isp-routes-custom.txt, vpn-routes-custom.txt) are deployed.
 # awg-quick up is not idempotent (Pitfall 5) — guard with ip link show before running.
 if [ "${RUN_ROUTING}" = "true" ]; then
-  echo "[24/${TOTAL_STAGES}] Bringing up VPN tunnel and activating routing.sh on ${SSH_HOST}..."
+  echo "[25/${TOTAL_STAGES}] Bringing up VPN tunnel and activating routing.sh on ${SSH_HOST}..."
   if ssh -o BatchMode=yes "${SSH_HOST}" "ip link show awg0" &>/dev/null; then
     echo "       awg0 already up — skipping awg-quick up."
   else
@@ -472,33 +490,33 @@ if [ "${RUN_ROUTING}" = "true" ]; then
   ssh -o BatchMode=yes "${SSH_HOST}" "sudo ${ROUTING_SH_REMOTE}"
   echo "       routing.sh activation complete — split-tunnel active; exception routes and exclusions applied."
 else
-  echo "[24/${TOTAL_STAGES}] Skipping routing.sh activation (--no-run). Run manually:"
+  echo "[25/${TOTAL_STAGES}] Skipping routing.sh activation (--no-run). Run manually:"
   echo "       ssh ${SSH_HOST} \"sudo awg-quick up awg0 && sudo ${ROUTING_SH_REMOTE}\""
 fi
 
 # ─── Stage 26: Deploy splitgate dispatcher to RPi (Phase 10 D-13, D-17) ──────
-echo "[25/${TOTAL_STAGES}] Deploying splitgate dispatcher to ${SSH_HOST}:${SPLITGATE_DISPATCHER_REMOTE}..."
+echo "[26/${TOTAL_STAGES}] Deploying splitgate dispatcher to ${SSH_HOST}:${SPLITGATE_DISPATCHER_REMOTE}..."
 scp -o BatchMode=yes "${SPLITGATE_DISPATCHER_LOCAL}" "${SSH_HOST}:${SPLITGATE_DISPATCHER_TMP}"
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${SPLITGATE_DISPATCHER_TMP} ${SPLITGATE_DISPATCHER_REMOTE} && sudo chmod +x ${SPLITGATE_DISPATCHER_REMOTE} && sudo chown root:root ${SPLITGATE_DISPATCHER_REMOTE}"
 echo "       splitgate dispatcher deployed (chmod +x, root:root)."
 
 # ─── Stage 27: Deploy logrotate config to RPi (Phase 10 D-11, D-19) ──────────
-echo "[26/${TOTAL_STAGES}] Deploying logrotate config to ${SSH_HOST}:${LOGROTATE_CONF_REMOTE}..."
+echo "[27/${TOTAL_STAGES}] Deploying logrotate config to ${SSH_HOST}:${LOGROTATE_CONF_REMOTE}..."
 scp -o BatchMode=yes "${LOGROTATE_CONF_LOCAL}" "${SSH_HOST}:${LOGROTATE_CONF_TMP}"
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${LOGROTATE_CONF_TMP} ${LOGROTATE_CONF_REMOTE} && sudo chmod 644 ${LOGROTATE_CONF_REMOTE} && sudo chown root:root ${LOGROTATE_CONF_REMOTE}"
 echo "       logrotate config deployed (mode 644, root:root)."
 
 # ─── Stage 28: Deploy splitgate-watch.service to RPi (Phase 13 D-10) ─────────
-echo "[27/${TOTAL_STAGES}] Deploying splitgate-watch.service and enabling daemon on ${SSH_HOST}..."
+echo "[28/${TOTAL_STAGES}] Deploying splitgate-watch.service and enabling daemon on ${SSH_HOST}..."
 scp -o BatchMode=yes "${WATCH_SERVICE_LOCAL}" "${SSH_HOST}:${WATCH_SERVICE_TMP}"
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${WATCH_SERVICE_TMP} ${WATCH_SERVICE_REMOTE} && sudo chmod 644 ${WATCH_SERVICE_REMOTE} && sudo chown root:root ${WATCH_SERVICE_REMOTE}"
 ssh -o BatchMode=yes "${SSH_HOST}" "sudo systemctl daemon-reload && sudo systemctl enable --now splitgate-watch.service"
 echo "       splitgate-watch.service deployed and enabled (auto-starts on boot)."
 
-# ─── Stage 29: Deploy splitgate-admin (conditional on src/admin/dist/ — D-05) ─
-echo "[29/${TOTAL_STAGES}] Checking for admin UI build at ${ADMIN_DIST_LOCAL}..."
+# ─── Stage 30: Deploy splitgate-admin (conditional on src/admin/dist/ — D-05) ─
+echo "[30/${TOTAL_STAGES}] Checking for admin UI build at ${ADMIN_DIST_LOCAL}..."
 if [ -d "${ADMIN_DIST_LOCAL}" ]; then
-  echo "[29/${TOTAL_STAGES}] Deploying splitgate admin UI and backend to ${SSH_HOST}..."
+  echo "[30/${TOTAL_STAGES}] Deploying splitgate admin UI and backend to ${SSH_HOST}..."
 
   # 29a: Deploy splitgate-admin.py backend
   scp -o BatchMode=yes "${ADMIN_PY_LOCAL}" "${SSH_HOST}:${ADMIN_PY_TMP}"
@@ -522,7 +540,7 @@ if [ -d "${ADMIN_DIST_LOCAL}" ]; then
   echo "       splitgate-admin.service enabled and started (accessible at http://192.168.1.254:${ADMIN_PORT:-8080})"
   echo "       Default password: admin — change via Settings page or: echo NEWPASS | sudo tee ${ADMIN_SECRET_REMOTE}"
 else
-  echo "[29/${TOTAL_STAGES}] Admin UI not built — skipping admin stages (${ADMIN_DIST_LOCAL}/ missing)"
+  echo "[30/${TOTAL_STAGES}] Admin UI not built — skipping admin stages (${ADMIN_DIST_LOCAL}/ missing)"
   echo "       To deploy admin: cd src/admin && npm run build && cd ../.. && bash src/deploy.sh"
 fi
 
@@ -559,7 +577,7 @@ echo "   PHASE 15: ${ADMIN_PY_REMOTE} + ${ADMIN_DIST_REMOTE} + ${ADMIN_SERVICE_R
 echo ""
 echo " Next steps:"
 echo ""
-echo "   # Tunnel was brought up automatically in Stage 24 (if --no-run not passed)."
+echo "   # Tunnel was brought up automatically in Stage 25 (if --no-run not passed)."
 echo "   # Verify peer handshake:"
 echo "   ssh pi4 \"sudo awg show\""
 echo ""

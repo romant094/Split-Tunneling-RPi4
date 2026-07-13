@@ -23,22 +23,26 @@ Source is `.env` in this repo. All except `SSH_HOST` are deployed to `/etc/split
 
 ## Deploy Stage Groups
 
-`deploy.sh` runs 26 stages from your Mac via SSH. Full deploy: `bash src/deploy.sh`.
+`deploy.sh` runs 30 stages from your Mac via SSH. Full deploy: `bash src/deploy.sh`.
+
+**Non-destructive redeploy:** Stages 7 and 8 (awg0.conf / vpn-gateway.env) skip the overwrite with a warning if the remote file already exists on the RPi — this protects edits made via the admin **Settings page** from being clobbered by a redeploy. Delete the remote file first to force a fresh deploy from the repo template.
 
 | Group | Stages | What happens |
 |-------|--------|--------------|
 | Preflight | 1–3 | Check required local files, source `.env` + `.env.secrets`, validate keys, verify SSH connectivity |
 | AmneziaWG install | 4 | Stream `src/scripts/install-awg.sh` over SSH to the RPi; DKMS build may take 10–30 min |
 | Splitgate namespace | 5 | Create `/etc/splitgate/` and `/etc/splitgate/logs/` on the RPi |
-| Config deploy | 6–10 | Render and deploy `awg0.conf` (mode 600), deploy `vpn-gateway.env` (mode 644), post-deploy file checks |
+| Config deploy | 6–10 | Render and deploy `awg0.conf` (mode 600, skip-if-exists), deploy `vpn-gateway.env` (mode 644, skip-if-exists), post-deploy file checks |
 | Routing deploy | 11–12 | SCP `routing.sh` to `/etc/splitgate/routing.sh`, deploy `vpn-routing.service` |
 | Autostart | 13–14 | Reload systemd, enable `awg-quick@awg0` + `vpn-routing.service` at boot, deploy `update-vpn-routes` |
 | Cron + rollback | 15–17 | Write `/etc/cron.d/vpn-routes` (daily at `CRON_UPDATE_HOUR:00`), deploy `vpn-rollback.sh`, ensure dnsmasq installed |
-| Logging | 18–20 | Deploy `dnsmasq.conf`, enable and start dnsmasq, deploy `vpn-status.sh`, deploy `watch-routes.py` |
-| Custom routes + NM | 21–22 | Conditionally deploy `isp-routes-custom.txt`, `vpn-routes-custom.txt`, and `ru-list-exclude.txt` if present; deploy NM dispatcher `10-vpn-routes` |
-| ASN helper | 23 | Deploy `asn-lookup.py` to `/etc/splitgate/asn-lookup.py` |
-| Final activation | 24 | Bring up `awg0` tunnel (if not up), run `routing.sh` to apply all routes, iptables LOG rules, and exception routes |
-| Splitgate artifacts | 25–27 | Deploy `splitgate` dispatcher to `/usr/local/bin/splitgate` (chmod +x); deploy `logrotate-vpn-gateway`; deploy and enable `splitgate-watch.service` |
+| Diagnostics dependency | 18 | Ensure `traceroute` apt package installed (idempotent `dpkg -l` guard) — required by the admin Diagnostics page |
+| Logging | 19–21 | Deploy `dnsmasq.conf`, enable and start dnsmasq, deploy `vpn-status.sh`, deploy `watch-routes.py` |
+| Custom routes + NM | 22–23 | Conditionally deploy `isp-routes-custom.txt`, `vpn-routes-custom.txt`, and `ru-list-exclude.txt` if present; deploy NM dispatcher `10-vpn-routes` |
+| ASN helper | 24 | Deploy `asn-lookup.py` to `/etc/splitgate/asn-lookup.py` |
+| Final activation | 25 | Bring up `awg0` tunnel (if not up), run `routing.sh` to apply all routes, iptables LOG rules, and exception routes |
+| Splitgate artifacts | 26–28 | Deploy `splitgate` dispatcher to `/usr/local/bin/splitgate` (chmod +x); deploy `logrotate-vpn-gateway`; deploy and enable `splitgate-watch.service` |
+| Admin UI | 30 | Conditionally deploy `splitgate-admin.py`, `admin/dist/`, and `splitgate-admin.service` if `src/admin/dist/` exists locally |
 
 ---
 
@@ -241,7 +245,7 @@ For a first-time deploy or when other files have changed:
 bash src/deploy.sh
 ```
 
-Stage 21 SCPs the file to `/etc/splitgate/isp-routes-custom.txt`. `routing.sh` Stage 5b loads the routes on activation.
+Stage 22 SCPs the file to `/etc/splitgate/isp-routes-custom.txt`. `routing.sh` Stage 5b loads the routes on activation.
 
 **Step 5: Verify**
 
@@ -304,7 +308,7 @@ For a first-time deploy or when other files have changed:
 bash src/deploy.sh
 ```
 
-Stage 21b SCPs the file to `/etc/splitgate/vpn-routes-custom.txt`. `routing.sh` Stage 5c deletes any existing ISP route for each CIDR and adds it via `awg0`.
+Stage 22b SCPs the file to `/etc/splitgate/vpn-routes-custom.txt`. `routing.sh` Stage 5c deletes any existing ISP route for each CIDR and adds it via `awg0`.
 
 **Step 5: Verify**
 
@@ -362,7 +366,7 @@ Note: `src/configs/ru-list-exclude.txt` is gitignored — never committed.
 bash src/deploy.sh
 ```
 
-Stage 22c SCPs `src/configs/ru-list-exclude.txt` to `/etc/splitgate/ru-list-exclude.txt`.
+Stage 23c SCPs `src/configs/ru-list-exclude.txt` to `/etc/splitgate/ru-list-exclude.txt`.
 
 **Step 4: Trigger a route rebuild**
 
@@ -464,7 +468,7 @@ Files that stay at system locations (required by their consuming daemon):
 
 **Synopsis:** `bash src/deploy.sh [--no-run]`
 
-Runs from your Mac. Connects to the RPi via `SSH_HOST=pi4` (from `.env`). 28 stages.
+Runs from your Mac. Connects to the RPi via `SSH_HOST=pi4` (from `.env`). 30 stages.
 Sources `.env` and `.env.secrets`; validates keys before any remote operation.
 
 | Flag | Description |
@@ -485,7 +489,7 @@ ssh pi4 "sudo /etc/splitgate/routing.sh"   # activate after --no-run deploy
 
 Fast custom-routes-only deploy. Runs from your Mac. 3 stages: SSH preflight, conditional SCP of each custom-route file, then `routing.sh --no-update` on the RPi.
 
-**When to use:** After editing `src/configs/isp-routes-custom.txt` or `src/configs/vpn-routes-custom.txt` for routine CIDR changes. Skips AmneziaWG install, key validation, and systemd setup — takes seconds instead of the full 28-stage deploy.
+**When to use:** After editing `src/configs/isp-routes-custom.txt` or `src/configs/vpn-routes-custom.txt` for routine CIDR changes. Skips AmneziaWG install, key validation, and systemd setup — takes seconds instead of the full 30-stage deploy.
 
 **When to use `src/deploy.sh` instead:** First-time deploy, AmneziaWG reinstall, systemd changes, or any change outside the two custom-route files.
 
@@ -687,7 +691,7 @@ ssh pi4 "cat /etc/splitgate/logs/watch-error.log"
 ssh pi4 "systemctl is-enabled splitgate-watch"   # expect: enabled
 ```
 
-Deployed by `deploy.sh` Stage 28. `vpn-rollback.sh` stops and disables the service as part of rollback.
+Deployed by `deploy.sh` Stage 28 (splitgate-watch.service). `vpn-rollback.sh` stops and disables the service as part of rollback.
 
 ---
 
@@ -748,11 +752,11 @@ Fix: `routing.sh` Stage 7 uses `! -d LAN_SUBNET` in the eth0 MASQUERADE rule. Re
 
 **dnsmasq fails to start or conflicts with an existing config**
 
-Symptom: Stage 17/18 of `deploy.sh` fails; `systemctl status dnsmasq` shows a config parse error or port conflict.
+Symptom: Stage 17/19 of `deploy.sh` fails; `systemctl status dnsmasq` shows a config parse error or port conflict.
 
 Cause: If `dnsmasq` config is deployed before the package is installed, `apt-get install dnsmasq` overwrites the deployed config.
 
-Fix: Re-run `bash src/deploy.sh` — Stage 18 always installs `dnsmasq` before Stage 19 deploys the config.
+Fix: Re-run `bash src/deploy.sh` — Stage 17 always installs `dnsmasq` before Stage 19 deploys the config.
 
 ---
 
