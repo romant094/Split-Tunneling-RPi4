@@ -5,12 +5,14 @@ Decisions: D-08 single-file Flask, D-09 Basic Auth via /etc/splitgate/admin.secr
            D-10 ADMIN_PORT, D-11 root
 """
 
-import os, re, hmac, time, json, secrets, subprocess, functools, threading
+import os, re, hmac, time, json, secrets, subprocess, functools, threading, ipaddress
 from datetime import date, datetime, timedelta
 from collections import deque
 from flask import Flask, request, jsonify, send_from_directory, Response, stream_with_context, make_response
 
 ADMIN_SECRET_PATH = '/etc/splitgate/admin.secret'
+ASN_LOOKUP_SCRIPT = '/etc/splitgate/asn-lookup.py'
+WHITE_LIST_PATH = '/etc/splitgate/white-list.txt'
 ADMIN_DIST_DIR = '/etc/splitgate/admin'
 ADMIN_PORT = int(os.environ.get('ADMIN_PORT', 8080))
 VPN_CUSTOM_ROUTES = '/etc/splitgate/vpn-routes-custom.txt'
@@ -31,6 +33,7 @@ SERVICE_UNIT_MAP = {
 }
 MANAGED_SERVICES = ['awg0', 'splitgate-watch', 'splitgate-admin', 'networking', 'dnsmasq']
 CIDR_RE = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/\d{1,2}$')
+IP_RE = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
 SECRET_KEY_RE = re.compile(r'(KEY|SECRET|PASS|TOKEN|PRIVATE)', re.IGNORECASE)
 
 app = Flask(__name__)
@@ -535,6 +538,70 @@ def api_routes_backup():
     filename = f"splitgate-routes-backup-{date.today().isoformat()}.txt"
     return Response(content, mimetype='text/plain',
                      headers={'Content-Disposition': f'attachment; filename={filename}'})
+
+# ── Diagnostics: whois/ASN, traceroute, route-match ──────────────────────────
+
+def lookup_org(ip):
+    """Look up ASN/org for a single IP via asn-lookup.py (D-08: reuse, no new whois dep)."""
+    try:
+        r = subprocess.run(['python3', ASN_LOOKUP_SCRIPT, ip],
+                            capture_output=True, text=True, timeout=12)
+        data = json.loads(r.stdout or '{}')
+        return data.get(ip)
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
+        return None
+
+def check_route_decision(target_ip):
+    """Replicate routing.sh precedence: vpn-routes-custom > isp-routes-custom > white-list > default VPN."""
+    ip = ipaddress.ip_address(target_ip)
+    for cidr in read_routes_file(VPN_CUSTOM_ROUTES):
+        try:
+            if ip in ipaddress.ip_network(cidr, strict=False):
+                return {'decision': 'VPN', 'matched_by': 'vpn-routes-custom.txt', 'cidr': cidr}
+        except ValueError:
+            continue
+    for cidr in read_routes_file(ISP_CUSTOM_ROUTES):
+        try:
+            if ip in ipaddress.ip_network(cidr, strict=False):
+                return {'decision': 'ISP', 'matched_by': 'isp-routes-custom.txt', 'cidr': cidr}
+        except ValueError:
+            continue
+    for cidr in read_routes_file(WHITE_LIST_PATH):
+        try:
+            if ip in ipaddress.ip_network(cidr, strict=False):
+                return {'decision': 'ISP', 'matched_by': 'white-list.txt (RU subnet)', 'cidr': cidr}
+        except ValueError:
+            continue
+    return {'decision': 'VPN', 'matched_by': 'default route (dev awg0)', 'cidr': None}
+
+@app.route('/api/diag/whois')
+@require_auth
+def api_diag_whois():
+    ip = request.args.get('ip', '')
+    if not IP_RE.match(ip):
+        return jsonify({'error': 'Invalid IP'}), 400
+    return jsonify(lookup_org(ip) or {})
+
+@app.route('/api/diag/traceroute')
+@require_auth
+def api_diag_traceroute():
+    target = request.args.get('target', '')
+    if not IP_RE.match(target):
+        return jsonify({'error': 'Invalid IP'}), 400
+    try:
+        r = subprocess.run(['traceroute', '-n', '-w', '2', '-m', '15', target],
+                            capture_output=True, text=True, timeout=60)
+    except FileNotFoundError:
+        return jsonify({'error': 'traceroute not installed'}), 503
+    return jsonify({'output': r.stdout, 'lines': r.stdout.splitlines()})
+
+@app.route('/api/diag/route-match')
+@require_auth
+def api_diag_route_match():
+    ip = request.args.get('ip', '')
+    if not IP_RE.match(ip):
+        return jsonify({'error': 'Invalid IP'}), 400
+    return jsonify(check_route_decision(ip))
 
 # ── Settings: env / AWG config / password / rollback ─────────────────────────
 
