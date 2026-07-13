@@ -109,6 +109,10 @@ bash src/deploy.sh --no-run   # deploy files only (use before tunnel is up)
 bash src/deploy-routes.sh     # fast push of custom-route files only (after editing isp-routes-custom.txt or vpn-routes-custom.txt)
 ```
 
+**Non-destructive redeploy:** `deploy.sh` no longer overwrites an already-present `/etc/splitgate/vpn-gateway.env` or `/etc/amnezia/amneziawg/awg0.conf` on the RPi — it skips the overwrite with a warning if the remote file already exists. Edit these files going forward via the admin **Settings page**, or delete the remote file first to force a fresh deploy from the repo template.
+
+`deploy.sh` also installs the `traceroute` apt package (required by the admin **Diagnostics** page), mirroring the existing dnsmasq install pattern.
+
 ### 5. Bring up the tunnel
 
 ```bash
