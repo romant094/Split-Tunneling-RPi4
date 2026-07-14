@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Progress } from '@/components/ui/progress'
 import { RefreshCw } from 'lucide-react'
 
 const SERVICE_LABELS = {
@@ -144,22 +145,31 @@ export default function Dashboard() {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* System 3 rows */}
-          <div className="space-y-2 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground w-12">CPU</span>
-              <span className="font-mono">{resources ? `${resources.cpu_percent}%` : '—'}</span>
+          <div className="space-y-3 text-sm">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground w-12">CPU</span>
+                <span className="font-mono">{resources ? `${resources.cpu_percent}%` : '—'}</span>
+              </div>
+              <Progress value={resources?.cpu_percent ?? 0} />
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground w-12">RAM</span>
-              <span className="font-mono">
-                {resources ? `${fmtGB(resources.mem_used)} / ${fmtGB(resources.mem_total)}` : '—'}
-              </span>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground w-12">RAM</span>
+                <span className="font-mono">
+                  {resources ? `${fmtGB(resources.mem_used)} / ${fmtGB(resources.mem_total)}` : '—'}
+                </span>
+              </div>
+              <Progress value={resources && resources.mem_total ? (resources.mem_used / resources.mem_total) * 100 : 0} />
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground w-12">Disk</span>
-              <span className="font-mono">
-                {resources ? `${fmtGB(resources.disk_used)} / ${fmtGB(resources.disk_total)}` : '—'}
-              </span>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground w-12">Disk</span>
+                <span className="font-mono">
+                  {resources ? `${fmtGB(resources.disk_used)} / ${fmtGB(resources.disk_total)}` : '—'}
+                </span>
+              </div>
+              <Progress value={resources && resources.disk_total ? (resources.disk_used / resources.disk_total) * 100 : 0} />
             </div>
           </div>
 
