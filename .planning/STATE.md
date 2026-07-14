@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Quick task 260603-f8c complete — deploy-routes.sh added; docs updated
-last_updated: "2026-07-13T19:18:04.980Z"
+last_updated: "2026-07-13T19:20:59.985Z"
 progress:
   total_phases: 16
   completed_phases: 13
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Non-RU traffic exits through AmneziaWG VPN; RU traffic exits direct via ISP — transparent to LAN devices, survives reboots, fully reversible.
-**Current focus:** Phase 6 — documentation
+**Current focus:** Phase 16 — Web Admin UX Upgrade
 
 ## Current Phase
 
@@ -122,7 +122,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 
 ## Phase 15: Web Admin Interface
 
-**Status:** Ready to execute
+**Status:** Executing Phase 16
 
 ### Decisions
 

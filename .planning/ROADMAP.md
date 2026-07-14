@@ -399,16 +399,16 @@ Plans:
 - UI-BACKUP: Export/download current ISP + VPN custom route lists as a backup file.
 - UI-DEPLOY: deploy.sh must not overwrite existing config files on redeploy — preserve local edits.
 **Depends on:** Phase 15
-**Plans:** 7 plans
+**Plans:** 4/7 plans executed
 
 Plans:
 
 **Wave 1 (parallel — disjoint files):**
 
-- [ ] 16-01-PLAN.md — Backend endpoints in splitgate-admin.py: /api/auth/check + Max-Age cookie, /api/routes/backup, /api/diag/{whois,traceroute,route-match} [UI-AUTH, UI-BACKUP, UI-DIAG, UI-ADDROUTE]
-- [ ] 16-02-PLAN.md — deploy.sh non-destructive redeploy (skip existing env/awg0.conf) + traceroute apt-install stage + docs sync [UI-DEPLOY, UI-DIAG]
-- [ ] 16-03-PLAN.md — Frontend auth persistence: api.js checkAuth() probe + App.jsx tri-state mount gate [UI-AUTH]
-- [ ] 16-04-PLAN.md — Resources card progress bars: new Progress component + Dashboard.jsx CPU/RAM/Disk bars [UI-RESOURCES]
+- [x] 16-01-PLAN.md — Backend endpoints in splitgate-admin.py: /api/auth/check + Max-Age cookie, /api/routes/backup, /api/diag/{whois,traceroute,route-match} [UI-AUTH, UI-BACKUP, UI-DIAG, UI-ADDROUTE]
+- [x] 16-02-PLAN.md — deploy.sh non-destructive redeploy (skip existing env/awg0.conf) + traceroute apt-install stage + docs sync [UI-DEPLOY, UI-DIAG]
+- [x] 16-03-PLAN.md — Frontend auth persistence: api.js checkAuth() probe + App.jsx tri-state mount gate [UI-AUTH]
+- [x] 16-04-PLAN.md — Resources card progress bars: new Progress component + Dashboard.jsx CPU/RAM/Disk bars [UI-RESOURCES]
 
 **Wave 2 (after Wave 1):**
 
