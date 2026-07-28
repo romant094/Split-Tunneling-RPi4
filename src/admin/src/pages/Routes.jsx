@@ -8,8 +8,14 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Trash2, Pencil, Plus, List, ArrowUpDown, ArrowUp, ArrowDown, Search } from 'lucide-react'
+import DiffPreview from '../components/DiffPreview'
+import { subscribe as subscribeStaging, getPending, clearPending } from '../routeStaging'
 
 const CIDR_RE = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/
+
+// Registry of each RouteSection's reload() fn, keyed by endpoint (vpn/isp),
+// so RoutesPage.applyRoutes() can refresh both sections after Apply.
+const _reloaders = {}
 
 function ipSortKey(cidr) {
   const [ip, prefix] = cidr.split('/')
@@ -45,8 +51,28 @@ function AddSingleDialog({ open, onClose, onAdd, existingCidrs }) {
   const [cidr, setCidr] = useState('')
   const [desc, setDesc] = useState('')
   const [err, setErr] = useState('')
+  const [lookingUp, setLookingUp] = useState(false)
 
-  function reset() { setCidr(''); setDesc(''); setErr('') }
+  function reset() { setCidr(''); setDesc(''); setErr(''); setLookingUp(false) }
+
+  async function lookupOrg() {
+    const c = cidr.trim()
+    if (!CIDR_RE.test(c)) return
+    if (desc.trim() !== '') return // never clobber user-entered text
+    const baseIp = c.split('/')[0]
+    setLookingUp(true)
+    try {
+      const r = await apiFetch(`/api/diag/whois?ip=${encodeURIComponent(baseIp)}`)
+      if (r.ok) {
+        const d = await r.json()
+        if (d && d.org && desc.trim() === '') setDesc(d.org)
+      }
+    } catch {
+      // silent no-op on lookup failure
+    } finally {
+      setLookingUp(false)
+    }
+  }
 
   async function handleAdd() {
     const c = cidr.trim()
@@ -70,11 +96,13 @@ function AddSingleDialog({ open, onClose, onAdd, existingCidrs }) {
             <Label>CIDR</Label>
             <Input value={cidr} onChange={e => { setCidr(e.target.value); setErr('') }}
               placeholder="x.x.x.x/n" className="font-mono"
+              onBlur={lookupOrg}
               onKeyDown={e => e.key === 'Enter' && handleAdd()} autoFocus />
           </div>
           <div className="space-y-1.5">
             <Label>Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
-            <Input value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. GitHub CDN" />
+            <Input value={desc} onChange={e => setDesc(e.target.value)}
+              placeholder={lookingUp ? 'looking up…' : 'e.g. GitHub CDN'} />
           </div>
           {err && <p className="text-destructive text-sm">{err}</p>}
         </div>
@@ -214,6 +242,7 @@ function RouteSection({ endpoint }) {
   const [editEntry, setEditEntry] = useState(null)
   const [deleteEntry, setDeleteEntry] = useState(null)
   const [msg, setMsg] = useState('')
+  const [staged, setStaged] = useState(() => getPending(endpoint))
 
   function load() {
     apiFetch(`/api/routes/${endpoint}`)
@@ -224,12 +253,27 @@ function RouteSection({ endpoint }) {
 
   useEffect(() => { setLoading(true); load() }, [endpoint])
 
+  useEffect(() => {
+    const unsub = subscribeStaging(state => setStaged(state[endpoint] || []))
+    return unsub
+  }, [endpoint])
+
+  useEffect(() => {
+    _reloaders[endpoint] = load
+    return () => { if (_reloaders[endpoint] === load) delete _reloaders[endpoint] }
+  })
+
   function toggleSort(field) {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortField(field); setSortDir('asc') }
   }
 
   const existingCidrs = new Set(routes.map(r => r.cidr))
+
+  // Pattern 4 diff: additions are staged entries not already present server-side;
+  // removals reserved for a future delete-staging feature (always empty for now).
+  const additions = staged.filter(e => !existingCidrs.has(e.cidr))
+  const removals = []
 
   const filtered = routes.filter(r =>
     !filter || r.cidr.includes(filter) || (r.description || '').toLowerCase().includes(filter.toLowerCase())
@@ -284,6 +328,12 @@ function RouteSection({ endpoint }) {
           </Button>
         </div>
       </div>
+      {(additions.length > 0 || removals.length > 0) && (
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pending changes</p>
+          <DiffPreview additions={additions} removals={removals} />
+        </div>
+      )}
       {msg && <p className="text-destructive text-sm">{msg}</p>}
       {loading ? (
         <p className="text-muted-foreground text-sm py-4">Loading…</p>
@@ -344,17 +394,55 @@ function RouteSection({ endpoint }) {
   )
 }
 
+function downloadBackup(blob) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `splitgate-routes-backup-${new Date().toISOString().slice(0, 10)}.txt`
+  document.body.appendChild(a); a.click()
+  document.body.removeChild(a); URL.revokeObjectURL(url)
+}
+
 export default function RoutesPage() {
   const [applyMsg, setApplyMsg] = useState('')
   const [applying, setApplying] = useState(false)
+  const [backingUp, setBackingUp] = useState(false)
+
+  async function flushStagedList(list) {
+    const entries = getPending(list)
+    if (!entries.length) return
+    await apiFetch(`/api/routes/${list}/bulk`, { method: 'POST', body: JSON.stringify({ entries }) })
+    clearPending(list)
+  }
 
   async function applyRoutes() {
     setApplying(true)
     setApplyMsg('Applying…')
-    const r = await apiFetch('/api/config/apply', { method: 'POST' })
-    const d = await r.json()
-    setApplyMsg(r.ok ? '✓ Applied' : `Error: ${d.error}`)
-    setApplying(false)
+    try {
+      // Bulk-write-then-apply: flush any staged adds (from Routes edits or Logs
+      // batch-add) into the route files first, then activate via config/apply.
+      await flushStagedList('vpn')
+      await flushStagedList('isp')
+      const r = await apiFetch('/api/config/apply', { method: 'POST' })
+      const d = await r.json()
+      setApplyMsg(r.ok ? '✓ Applied' : `Error: ${d.error}`)
+      if (_reloaders.vpn) _reloaders.vpn()
+      if (_reloaders.isp) _reloaders.isp()
+    } catch {
+      setApplyMsg('Error: apply failed')
+    } finally {
+      setApplying(false)
+    }
+  }
+
+  async function downloadBackupNow() {
+    setBackingUp(true)
+    try {
+      const r = await apiFetch('/api/routes/backup')
+      if (r.ok) downloadBackup(await r.blob())
+    } finally {
+      setBackingUp(false)
+    }
   }
 
   return (
@@ -368,6 +456,7 @@ export default function RoutesPage() {
           </p>
         </div>
         <div className="flex items-center gap-3 shrink-0">
+          <Button onClick={downloadBackupNow} disabled={backingUp} size="sm" variant="outline">Download Backup</Button>
           <Button onClick={applyRoutes} disabled={applying} size="sm">Apply Changes</Button>
           {applyMsg && <span className={`text-sm ${applyMsg.startsWith('Error') ? 'text-destructive' : 'text-primary'}`}>{applyMsg}</span>}
         </div>
