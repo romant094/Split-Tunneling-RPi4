@@ -31,7 +31,14 @@ const _reloaders = {}
 
 function ipSortKey(cidr) {
   const [ip, prefix] = cidr.split('/')
-  const parts = ip.split('.').map(n => parseInt(n, 10).toString().padStart(3, '0'))
+  // Defensively pad/clamp to exactly 4 octets so a malformed CIDR (fewer/more
+  // dot-separated groups, non-numeric octets) sorts predictably instead of
+  // producing "NaN" segments (IN-03).
+  const octets = ip.split('.')
+  const parts = Array.from({ length: 4 }, (_, i) => {
+    const n = parseInt(octets[i], 10)
+    return (Number.isFinite(n) ? n : 0).toString().padStart(3, '0')
+  })
   return parts.join('.') + '/' + (prefix || '').padStart(2, '0')
 }
 
