@@ -185,6 +185,60 @@ function useStageActions() {
   return { stageMsg, stage, stageMany }
 }
 
+// Multi-select mode: clicking a row toggles selection; state is display-only
+// and resets on unmount (component-local useState).
+function useSelection() {
+  const [selectMode, setSelectMode] = useState(false)
+  const [selected, setSelected] = useState(new Set())
+
+  function toggle(line) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(line)) next.delete(line); else next.add(line)
+      return next
+    })
+  }
+  function clear() { setSelected(new Set()) }
+  function exit() { setSelectMode(false); clear() }
+
+  return { selectMode, setSelectMode, selected, toggle, clear, exit }
+}
+
+// Selected lines -> deduped {cidr, description} entries ready for stageAddMany.
+function selectedToEntries(selected) {
+  const entries = []
+  const seen = new Set()
+  for (const line of selected) {
+    const cidr = extractCidr(line)
+    if (!cidr || seen.has(cidr)) continue
+    seen.add(cidr)
+    entries.push({ cidr, description: extractOrg(line) })
+  }
+  return entries
+}
+
+function SelectionBar({ selectMode, onEnter, count, onClear, onAddIsp, onAddVpn }) {
+  if (!selectMode) {
+    return (
+      <Button size="sm" variant="outline" className="h-8" onClick={onEnter}>
+        <MousePointerClick className="h-3.5 w-3.5 mr-1" />Select
+      </Button>
+    )
+  }
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-xs text-muted-foreground">{count} selected</span>
+      <Button size="sm" variant="outline" className="h-8" disabled={!count} onClick={onAddIsp}>
+        Add {count} to ISP
+      </Button>
+      <Button size="sm" variant="outline" className="h-8" disabled={!count} onClick={onAddVpn}>
+        Add {count} to VPN
+      </Button>
+      <Button size="sm" variant="ghost" className="h-8" onClick={onClear}>Clear selection</Button>
+    </div>
+  )
+}
+
 // Inline legend explaining the ✓/✗ status icon shown right after [VPN]/[ISP]
 // (meaning per watch-routes.py _check_conntrack docstring).
 function LogsLegend() {
@@ -311,7 +365,8 @@ export function LogsLive() {
   const [filters, setFilters] = useState([''])
   const [dedupe, setDedupe] = useState(false)
   const [ctxMenu, setCtxMenu] = useState(null)
-  const { stageMsg, stage } = useStageActions()
+  const { stageMsg, stage, stageMany } = useStageActions()
+  const { selectMode, setSelectMode, selected, toggle, clear, exit } = useSelection()
 
   useEffect(() => {
     const u1 = subscribeLines(setLiveLines)
@@ -327,6 +382,10 @@ export function LogsLive() {
   function onRowContextMenu(e, line) {
     setCtxMenu({ x: e.clientX, y: e.clientY, line })
   }
+  function batchStage(list) {
+    stageMany(list, selectedToEntries(selected))
+    exit()
+  }
 
   return (
     <div className="space-y-3">
@@ -341,6 +400,9 @@ export function LogsLive() {
           onClick={() => setDedupe(v => !v)} title="Collapse all lines sharing a content signature">
           Hide duplicates
         </Button>
+        <SelectionBar selectMode={selectMode} onEnter={() => setSelectMode(true)}
+          count={selected.size} onClear={exit}
+          onAddIsp={() => batchStage('isp')} onAddVpn={() => batchStage('vpn')} />
         <span className="text-muted-foreground text-xs ml-auto">{visible.length} / {liveLines.length} lines</span>
         <Button size="sm" variant="ghost" className="h-8" onClick={() => downloadLines(visible, filename)}>
           <Download className="h-3.5 w-3.5 mr-1" />Download
@@ -350,7 +412,8 @@ export function LogsLive() {
       <LogsLegend />
       {stageMsg && <p className="text-xs text-primary">{stageMsg}</p>}
       <LogBox lines={visible} colorize={true} humanTime={true}
-        interactive onRowContextMenu={onRowContextMenu} />
+        interactive selectMode={selectMode} selected={selected} onToggleSelect={toggle}
+        onRowContextMenu={onRowContextMenu} />
       {ctxMenu && (
         <LogContextMenu x={ctxMenu.x} y={ctxMenu.y} line={ctxMenu.line}
           onClose={() => setCtxMenu(null)} onStage={stage} />
@@ -370,10 +433,15 @@ export function LogsHistory() {
   const [histMsg, setHistMsg] = useState('')
   const [dedupe, setDedupe] = useState(false)
   const [ctxMenu, setCtxMenu] = useState(null)
-  const { stageMsg, stage } = useStageActions()
+  const { stageMsg, stage, stageMany } = useStageActions()
+  const { selectMode, setSelectMode, selected, toggle, exit } = useSelection()
 
   function onRowContextMenu(e, line) {
     setCtxMenu({ x: e.clientX, y: e.clientY, line })
+  }
+  function batchStage(list) {
+    stageMany(list, selectedToEntries(selected))
+    exit()
   }
 
   async function loadHistory() {
@@ -423,6 +491,11 @@ export function LogsHistory() {
             Hide duplicates
           </Button>
         )}
+        {histLines.length > 0 && (
+          <SelectionBar selectMode={selectMode} onEnter={() => setSelectMode(true)}
+            count={selected.size} onClear={exit}
+            onAddIsp={() => batchStage('isp')} onAddVpn={() => batchStage('vpn')} />
+        )}
         {histMsg && <span className="text-xs text-muted-foreground self-end pb-1">{histMsg}</span>}
         {histLines.length > 0 && (
           <Button size="sm" variant="ghost" className="h-8 self-end ml-auto"
@@ -438,7 +511,8 @@ export function LogsHistory() {
           {stageMsg && <p className="text-xs text-primary">{stageMsg}</p>}
           <p className="text-xs text-muted-foreground">{visible.length} / {histLines.length} lines shown</p>
           <LogBox lines={visible} colorize={true} humanTime={true}
-            interactive onRowContextMenu={onRowContextMenu} />
+            interactive selectMode={selectMode} selected={selected} onToggleSelect={toggle}
+            onRowContextMenu={onRowContextMenu} />
           {ctxMenu && (
             <LogContextMenu x={ctxMenu.x} y={ctxMenu.y} line={ctxMenu.line}
               onClose={() => setCtxMenu(null)} onStage={stage} />
