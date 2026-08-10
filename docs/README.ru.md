@@ -224,7 +224,7 @@ echo 'НОВЫЙ_ПАРОЛЬ' | ssh pi4 "sudo tee /etc/splitgate/admin.secret"
 **Страницы:**
 - **Dashboard** — статус VPN-туннеля, состояние демона, возраст RU-списка, количество маршрутов (авто-обновление 10 с)
 - **Services** — запуск/остановка/перезапуск awg0, splitgate-watch, networking, dnsmasq
-- **Routes** — добавление/удаление CIDR в vpn-routes-custom.txt и isp-routes-custom.txt; кнопка Apply перезагружает маршруты
+- **Routes** — добавление/удаление CIDR в vpn-routes-custom.txt и isp-routes-custom.txt; кнопка Apply перезагружает маршруты. Кнопка **Fill Descriptions** массово подставляет названия организаций для всех маршрутов с пустым описанием, используя тот же whois/ASN-поиск, что и при добавлении одного маршрута. Запросы идут по одному (для длинных списков это может занять время) и сохраняются как отложенные изменения (строки `~` в диффе) — до нажатия Apply Changes файлы маршрутов не меняются.
 - **Logs** — Watch Live (SSE-стрим в реальном времени), Install Log, Watch Errors, System Journal
 - **Diagnostics** — whois-поиск по IP, traceroute, проверка решения о маршрутизации (VPN/ISP) для заданного IP
 - **Config** — редактирование ru-list-exclude.txt; ручное обновление RU-списка

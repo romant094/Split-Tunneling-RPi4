@@ -500,6 +500,25 @@ export default function RoutesPage() {
     return true
   }
 
+  async function flushStagedDescriptions(list) {
+    const map = getPendingDescriptions(list)
+    const entries = Object.entries(map)
+    if (!entries.length) return
+    // Sequential: each PUT rewrites the whole route file on the RPi, concurrent
+    // writes would race. A route deleted meanwhile 404s - ignore and continue.
+    for (const [cidr, description] of entries) {
+      try {
+        await apiFetch(`/api/routes/${list}`, {
+          method: 'PUT',
+          body: JSON.stringify({ old_cidr: cidr, cidr, description }),
+        })
+      } catch {
+        // ignore individual failures, continue flushing the rest
+      }
+    }
+    clearPendingDescriptions(list)
+  }
+
   async function applyRoutes() {
     setApplying(true)
     setApplyMsg('Applying…')
@@ -514,6 +533,8 @@ export default function RoutesPage() {
         setApplyMsg('Error: failed to save staged routes — not applied, changes kept pending')
         return
       }
+      await flushStagedDescriptions('vpn')
+      await flushStagedDescriptions('isp')
       const r = await apiFetch('/api/config/apply', { method: 'POST' })
       const d = await r.json()
       setApplyMsg(r.ok ? '✓ Applied' : `Error: ${d.error}`)
