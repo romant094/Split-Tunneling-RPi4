@@ -173,7 +173,12 @@ def parse_env_file(path):
 def write_env_file(path, data):
     with open(path, 'w') as fh:
         for k, v in data.items():
-            fh.write(f'{k}={v}\n')
+            # Always double-quote values: since this file is `source`d as bash, an
+            # unquoted value containing spaces breaks word-splitting for downstream
+            # ${VAR} expansions, and round-tripping via strip_env_quotes() on read
+            # would otherwise silently drop quoting on every re-write (WR-04).
+            v = str(v).replace('"', '\\"')
+            fh.write(f'{k}="{v}"\n')
 
 def mask_value(key, value):
     if SECRET_KEY_RE.search(key):
