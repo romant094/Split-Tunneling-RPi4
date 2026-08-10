@@ -322,7 +322,9 @@ function RouteSection({ endpoint }) {
   }
 
   async function handleDelete() {
-    await apiFetch(`/api/routes/${endpoint}`, { method: 'DELETE', body: JSON.stringify({ cidr: deleteEntry.cidr }) })
+    setMsg('')
+    const r = await apiFetch(`/api/routes/${endpoint}`, { method: 'DELETE', body: JSON.stringify({ cidr: deleteEntry.cidr }) })
+    if (!r.ok) { const d = await r.json(); setMsg(d.error) }
     setDeleteEntry(null)
     load()
   }
