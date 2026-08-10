@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 import { NavLink, Outlet, Navigate } from 'react-router-dom'
-import { format } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import { apiFetch } from '../api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Download, Plus, X, Filter, CalendarIcon } from 'lucide-react'
+import { Download, Plus, X, Filter, CalendarIcon, MousePointerClick } from 'lucide-react'
 import { setOnPage, setBgMode as setStreamBgMode, subscribeLines, subscribeMeta, clearLines } from '../logStream'
+import { stageAdd, stageAddMany } from '../routeStaging'
 import { cn } from '@/lib/utils'
 
 const MAX_FILTERS = 5
@@ -38,7 +39,104 @@ function downloadLines(lines, filename) {
   document.body.removeChild(a); URL.revokeObjectURL(url)
 }
 
-export function LogBox({ lines, colorize = false }) {
+// Daemon line format (src/scripts/watch-routes.py _write_daemon_line / format_line):
+//   {ts} [{tag}] {status} {src} → {dst_part} {port_part} | {org}
+// `status` (✓/✗) may be empty when conntrack is unavailable.
+const DAEMON_LINE_RE = /^\S+\s+\[(VPN|ISP)\]\s*/
+
+// D-02/D-03: dedupe signature strips the leading timestamp and [VPN]/[ISP] tag,
+// comparing only the "{status} {src} → {dst} {port} | {org}" substring. Hides
+// ALL matching lines in the current view, not just adjacent repeats.
+function dedupeSignature(line) {
+  return line.replace(DAEMON_LINE_RE, '').trim()
+}
+
+function dedupeLines(lines) {
+  const seen = new Set()
+  const out = []
+  for (const line of lines) {
+    const sig = dedupeSignature(line)
+    if (seen.has(sig)) continue
+    seen.add(sig)
+    out.push(line)
+  }
+  return out
+}
+
+// Human-readable timestamp: replace the leading ISO token in-place, keep the
+// rest of the raw line untouched (used for display only — Copy/download use
+// the raw line).
+function formatTs(line) {
+  const idx = line.indexOf(' ')
+  if (idx === -1) return line
+  const token = line.slice(0, idx)
+  const rest = line.slice(idx)
+  try {
+    const d = parseISO(token)
+    if (isNaN(d.getTime())) return line
+    return format(d, 'dd MMM HH:mm:ss') + rest
+  } catch {
+    return line
+  }
+}
+
+// Destination IP token appears right after "→"; convert to a /32 CIDR.
+function extractCidr(line) {
+  const arrowIdx = line.indexOf('→')
+  if (arrowIdx === -1) return null
+  const after = line.slice(arrowIdx + 1).trim()
+  const m = after.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)
+  return m ? `${m[1]}/32` : null
+}
+
+// Org text (if present) appears after the last " | ".
+function extractOrg(line) {
+  const idx = line.lastIndexOf('|')
+  if (idx === -1) return ''
+  return line.slice(idx + 1).trim()
+}
+
+function LogContextMenu({ x, y, line, onClose, onStage }) {
+  const ref = useRef(null)
+  useEffect(() => {
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) onClose() }
+    function handleKey(e) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [onClose])
+
+  const cidr = extractCidr(line)
+
+  async function copy() {
+    try { await navigator.clipboard.writeText(line) } catch { /* clipboard unavailable — no-op */ }
+    onClose()
+  }
+  function add(list) {
+    if (!cidr) return
+    onStage(list, cidr, extractOrg(line))
+    onClose()
+  }
+
+  return (
+    <div ref={ref} className="fixed z-50 min-w-56 rounded-md border border-border bg-popover text-popover-foreground shadow-md py-1 text-sm"
+      style={{ top: y, left: x }}>
+      <button className="w-full text-left px-3 py-1.5 hover:bg-accent cursor-pointer" onClick={copy}>Copy</button>
+      <button className="w-full text-left px-3 py-1.5 hover:bg-accent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+        disabled={!cidr} onClick={() => add('isp')}>Add route to ISP list</button>
+      <button className="w-full text-left px-3 py-1.5 hover:bg-accent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+        disabled={!cidr} onClick={() => add('vpn')}>Add route to VPN list</button>
+    </div>
+  )
+}
+
+export function LogBox({
+  lines, colorize = false, humanTime = false,
+  interactive = false, selectMode = false, selected, onToggleSelect, onRowContextMenu,
+}) {
   const ref = useRef(null)
   useEffect(() => {
     if (ref.current) ref.current.scrollTop = ref.current.scrollHeight
@@ -46,15 +144,34 @@ export function LogBox({ lines, colorize = false }) {
   return (
     <div className="log-container" ref={ref}>
       {lines.map((line, i) => {
-        let cls = ''
+        let cls = 'log-row'
         if (colorize) {
-          if (line.includes('[VPN]')) cls = 'log-line-vpn'
-          else if (line.includes('[ISP]')) cls = 'log-line-isp'
+          if (line.includes('[VPN]')) cls += ' log-line-vpn'
+          else if (line.includes('[ISP]')) cls += ' log-line-isp'
         }
-        return <div key={i} className={cls}>{line || ' '}</div>
+        if (interactive && selectMode && selected && selected.has(line)) cls += ' log-row-selected'
+        const display = humanTime ? formatTs(line) : line
+        return (
+          <div key={i} className={cls}
+            onContextMenu={interactive ? (e) => { e.preventDefault(); onRowContextMenu && onRowContextMenu(e, line) } : undefined}
+            onClick={interactive && selectMode ? () => onToggleSelect && onToggleSelect(line) : undefined}
+          >
+            {display || ' '}
+          </div>
+        )
       })}
       {lines.length === 0 && <div className="text-muted-foreground">No output</div>}
     </div>
+  )
+}
+
+// Inline legend explaining the ✓/✗ status icon shown right after [VPN]/[ISP]
+// (meaning per watch-routes.py _check_conntrack docstring).
+function LogsLegend() {
+  return (
+    <p className="text-xs text-muted-foreground">
+      ✓ = connection tracked (packets flowing) · ✗ = no conntrack entry (blocked/idle) · shown right after the [VPN]/[ISP] tag
+    </p>
   )
 }
 
@@ -172,6 +289,7 @@ export function LogsLive() {
   const [liveLines, setLiveLines] = useState([])
   const [liveMeta, setLiveMeta] = useState({ connected: false, bgMode: false })
   const [filters, setFilters] = useState([''])
+  const [dedupe, setDedupe] = useState(false)
 
   useEffect(() => {
     const u1 = subscribeLines(setLiveLines)
@@ -180,7 +298,8 @@ export function LogsLive() {
     return () => { setOnPage(false); u1(); u2() }
   }, [])
 
-  const visible = applyFilters(liveLines, filters)
+  const filtered = applyFilters(liveLines, filters)
+  const visible = dedupe ? dedupeLines(filtered) : filtered
   const filename = `splitgate-live-${format(new Date(), 'yyyy-MM-dd')}.txt`
 
   return (
@@ -192,13 +311,18 @@ export function LogsLive() {
           {liveMeta.bgMode ? '● Background ON' : '○ Background'}
         </Button>
         <Button size="sm" variant="ghost" className="h-8" onClick={clearLines}>Clear</Button>
+        <Button size="sm" variant={dedupe ? 'default' : 'outline'} className="h-8"
+          onClick={() => setDedupe(v => !v)} title="Collapse all lines sharing a content signature">
+          Hide duplicates
+        </Button>
         <span className="text-muted-foreground text-xs ml-auto">{visible.length} / {liveLines.length} lines</span>
         <Button size="sm" variant="ghost" className="h-8" onClick={() => downloadLines(visible, filename)}>
           <Download className="h-3.5 w-3.5 mr-1" />Download
         </Button>
       </div>
       <FilterBar filters={filters} onChange={setFilters} />
-      <LogBox lines={visible} colorize={true} />
+      <LogsLegend />
+      <LogBox lines={visible} colorize={true} humanTime={true} />
     </div>
   )
 }
@@ -212,6 +336,7 @@ export function LogsHistory() {
   const [histLines, setHistLines] = useState([])
   const [histLoading, setHistLoading] = useState(false)
   const [histMsg, setHistMsg] = useState('')
+  const [dedupe, setDedupe] = useState(false)
 
   async function loadHistory() {
     if (!histFromDate) { setHistMsg('Select a start date'); return }
@@ -228,7 +353,8 @@ export function LogsHistory() {
     setHistLoading(false)
   }
 
-  const visible = applyFilters(histLines, filters)
+  const filtered = applyFilters(histLines, filters)
+  const visible = dedupe ? dedupeLines(filtered) : filtered
   const filename = histFromDate
     ? `splitgate-hist-${format(histFromDate, 'yyyy-MM-dd')}${histToDate ? `-${format(histToDate, 'yyyy-MM-dd')}` : ''}.txt`
     : 'splitgate-hist.txt'
@@ -253,6 +379,12 @@ export function LogsHistory() {
         <Button size="sm" variant="outline" onClick={loadHistory} disabled={histLoading} className="h-8 self-end">
           {histLoading ? 'Loading…' : 'Load'}
         </Button>
+        {histLines.length > 0 && (
+          <Button size="sm" variant={dedupe ? 'default' : 'outline'} className="h-8 self-end"
+            onClick={() => setDedupe(v => !v)} title="Collapse all lines sharing a content signature">
+            Hide duplicates
+          </Button>
+        )}
         {histMsg && <span className="text-xs text-muted-foreground self-end pb-1">{histMsg}</span>}
         {histLines.length > 0 && (
           <Button size="sm" variant="ghost" className="h-8 self-end ml-auto"
@@ -264,8 +396,9 @@ export function LogsHistory() {
       {histLines.length > 0 && (
         <>
           <FilterBar filters={filters} onChange={setFilters} />
+          <LogsLegend />
           <p className="text-xs text-muted-foreground">{visible.length} / {histLines.length} lines shown</p>
-          <LogBox lines={visible} colorize={true} />
+          <LogBox lines={visible} colorize={true} humanTime={true} />
         </>
       )}
       {histLines.length === 0 && !histLoading && (
