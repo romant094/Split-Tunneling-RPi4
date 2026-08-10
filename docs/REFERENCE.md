@@ -615,7 +615,10 @@ ssh pi4 "sudo cat /etc/cron.d/vpn-routes"
 **Synopsis:** `sudo python3 /etc/splitgate/watch-routes.py [--src IP] [--no-dns] [--tag {VPN,ISP,both}] [--no-asn] [--daemon]`
 
 Real-time iptables log enricher. Spawns `journalctl -f -k --no-pager -o short-iso` and
-parses `[VPN]`/`[ISP]` lines as they arrive. Resolves destination IPs via cached rDNS lookups
+parses `[VPN]`/`[ISP]` lines as they arrive. The journalctl `short-iso` zone offset (e.g. `+0300`)
+is captured by `_LOG_RE` and normalized to a UTC instant (`...Z`) via `_to_utc_z()` before the
+line is printed or written — this is what every downstream consumer (log files, web admin) sees.
+Resolves destination IPs via cached rDNS lookups
 (in-memory cache, 2-second timeout). Lines for new destination IPs are buffered until the ASN lookup
 completes (typically 1–3 s), so every printed line carries ` | {org}`. Repeated IPs print immediately
 from cache. Stalled lookups flush after 6 seconds.
@@ -624,10 +627,11 @@ In `--daemon` mode a connection status field (✓/✗) is added to each line aft
 - `✓` = ESTABLISHED or TIME_WAIT found in `/proc/net/nf_conntrack` after a 3-second delay
 - `✗` = not found in conntrack (UDP connections always show `✗`)
 
-Output format in daemon mode:
+Output format in daemon mode (timestamps are UTC; the web admin Logs page renders them in the
+browser's local timezone):
 ```
-2026-05-29T10:14:00 [ISP] ✓ 192.168.1.237 → yandex.ru TCP:443 | TELETECH, RU
-2026-05-29T10:14:05 [ISP] ✗ 192.168.1.237 → github.com TCP:443 | FASTLY, US
+2026-05-29T07:14:00Z [ISP] ✓ 192.168.1.237 → yandex.ru TCP:443 | TELETECH, RU
+2026-05-29T07:14:05Z [ISP] ✗ 192.168.1.237 → github.com TCP:443 | FASTLY, US
 ```
 
 Log files: `/etc/splitgate/logs/watch-YYYY-MM-DD.log`. A new dated file is opened at midnight.

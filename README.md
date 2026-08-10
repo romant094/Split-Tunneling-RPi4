@@ -173,9 +173,11 @@ ssh pi4 "grep '[ISP] ✗' /etc/splitgate/logs/watch-$(date +%F).log"
 Each log line shows routing tag, connection status, source/destination, protocol:port, and org:
 
 ```
-2026-05-29T10:14:00 [ISP] ✓ 192.168.1.237 → yandex.ru TCP:443 | TELETECH, RU
-2026-05-29T10:14:05 [ISP] ✗ 192.168.1.237 → github.com TCP:443 | FASTLY, US
+2026-05-29T07:14:00Z [ISP] ✓ 192.168.1.237 → yandex.ru TCP:443 | TELETECH, RU
+2026-05-29T07:14:05Z [ISP] ✗ 192.168.1.237 → github.com TCP:443 | FASTLY, US
 ```
+
+Timestamps are stored in UTC (`Z` suffix); the web admin Logs page renders them in the browser's local timezone.
 
 `✓` = connection found in conntrack (ESTABLISHED/TIME_WAIT); `✗` = not found (UDP connections always show `✗`).
 

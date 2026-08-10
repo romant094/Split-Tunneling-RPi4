@@ -406,5 +406,59 @@ class TestPendingBuffer(unittest.TestCase):
             self.assertNotIn(dst, wr._pending)
 
 
+# ─── _to_utc_z / _LOG_RE offset tests (quick task 260810-iym) ─────────────────
+
+
+class TestToUtcZ(unittest.TestCase):
+    """Regression tests for offset capture + UTC normalization (_to_utc_z)."""
+
+    def test_basic_offset_plus0300(self) -> None:
+        """+0300 (basic format) normalizes to the equivalent UTC instant."""
+        self.assertEqual(wr._to_utc_z("2026-05-21T11:36:21+0300"), "2026-05-21T08:36:21Z")
+
+    def test_extended_offset_plus03_00(self) -> None:
+        """+03:00 (extended format) normalizes identically to +0300."""
+        self.assertEqual(wr._to_utc_z("2026-05-21T11:36:21+03:00"), "2026-05-21T08:36:21Z")
+
+    def test_already_z_is_idempotent(self) -> None:
+        """An already-UTC 'Z' timestamp round-trips unchanged."""
+        self.assertEqual(wr._to_utc_z("2026-05-21T08:36:21Z"), "2026-05-21T08:36:21Z")
+
+    def test_naive_input_treated_as_host_local(self) -> None:
+        """No-offset input is interpreted host-local, converted to UTC, ends with Z.
+
+        Host-timezone-independent: compare against the instant produced by
+        attaching the host's local zone directly, not a hardcoded literal.
+        """
+        naive = "2026-05-21T11:36:21"
+        result = wr._to_utc_z(naive)
+        self.assertTrue(result.endswith("Z"))
+        import datetime as _dt
+
+        expected_instant = _dt.datetime.fromisoformat(naive).astimezone().astimezone(_dt.timezone.utc)
+        actual_instant = _dt.datetime.fromisoformat(result.replace("Z", "+00:00"))
+        self.assertEqual(actual_instant, expected_instant)
+
+    def test_garbage_input_returned_unchanged(self) -> None:
+        """Malformed input never raises — the raw token is returned as-is."""
+        self.assertEqual(wr._to_utc_z("garbage"), "garbage")
+
+
+class TestLogReOffsetCapture(unittest.TestCase):
+    """_LOG_RE must capture the journalctl short-iso zone offset when present."""
+
+    def test_log_re_captures_offset_suffix(self) -> None:
+        line = "2026-05-21T11:36:21+0300 raspberrypi kernel: [VPN] IN=eth0 OUT=awg0 SRC=1.1.1.1 DST=2.2.2.2 PROTO=TCP DPT=443"
+        m = wr._LOG_RE.search(line)
+        self.assertIsNotNone(m)
+        self.assertEqual(m.group("ts"), "2026-05-21T11:36:21+0300")
+
+    def test_log_re_still_matches_bare_timestamp(self) -> None:
+        line = "2026-05-21T11:36:21 raspberrypi kernel: [ISP] IN=eth0 OUT=eth0 SRC=1.1.1.1 DST=2.2.2.2 PROTO=UDP"
+        m = wr._LOG_RE.search(line)
+        self.assertIsNotNone(m)
+        self.assertEqual(m.group("ts"), "2026-05-21T11:36:21")
+
+
 if __name__ == "__main__":
     unittest.main()

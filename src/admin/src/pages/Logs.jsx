@@ -65,7 +65,12 @@ function dedupeLines(lines) {
 
 // Human-readable timestamp: replace the leading ISO token in-place, keep the
 // rest of the raw line untouched (used for display only — Copy/download use
-// the raw line).
+// the raw line). The source token is a UTC instant ending in 'Z'
+// (watch-routes.py _to_utc_z, quick task 260810-iym); date-fns `format()`
+// always renders in the browser's local timezone. Pre-fix historical log
+// lines without a trailing 'Z' are naive and rendered as-is by parseISO
+// (browser-local interpretation) — their apparent offset vs. the RPi's
+// wall clock is a known artifact of legacy data, not a bug.
 function formatTs(line) {
   const idx = line.indexOf(' ')
   if (idx === -1) return line
