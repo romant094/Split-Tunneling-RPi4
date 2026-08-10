@@ -41,13 +41,6 @@ export function stageAddMany(list, entries) {
   _notify()
 }
 
-export function unstage(list, cidr) {
-  const arr = _pending[list]
-  if (!arr) return
-  _pending[list] = arr.filter(e => e.cidr !== cidr)
-  _notify()
-}
-
 export function getPending(list) {
   return [...(_pending[list] || [])]
 }
