@@ -387,7 +387,7 @@ export function LogsLive() {
   const [dedupe, setDedupe] = useState(false)
   const [ctxMenu, setCtxMenu] = useState(null)
   const { stageMsg, stage, stageMany } = useStageActions()
-  const { selectMode, setSelectMode, selected, toggle, clear, exit } = useSelection()
+  const { selectMode, setSelectMode, selected, toggle, clear, exit, selectAll } = useSelection()
 
   useEffect(() => {
     const u1 = subscribeLines(setLiveLines)
@@ -423,7 +423,8 @@ export function LogsLive() {
         </Button>
         <SelectionBar selectMode={selectMode} onEnter={() => setSelectMode(true)}
           count={selected.size} onClear={exit}
-          onAddIsp={() => batchStage('isp')} onAddVpn={() => batchStage('vpn')} />
+          onAddIsp={() => batchStage('isp')} onAddVpn={() => batchStage('vpn')}
+          total={visible.length} onToggleAll={() => selectAll(visible)} />
         <span className="text-muted-foreground text-xs ml-auto">{visible.length} / {liveLines.length} lines</span>
         <Button size="sm" variant="ghost" className="h-8" onClick={() => downloadLines(visible, filename)}>
           <Download className="h-3.5 w-3.5 mr-1" />Download
@@ -455,7 +456,7 @@ export function LogsHistory() {
   const [dedupe, setDedupe] = useState(false)
   const [ctxMenu, setCtxMenu] = useState(null)
   const { stageMsg, stage, stageMany } = useStageActions()
-  const { selectMode, setSelectMode, selected, toggle, exit } = useSelection()
+  const { selectMode, setSelectMode, selected, toggle, exit, selectAll } = useSelection()
 
   function onRowContextMenu(e, line) {
     setCtxMenu({ x: e.clientX, y: e.clientY, line })
@@ -515,7 +516,8 @@ export function LogsHistory() {
         {histLines.length > 0 && (
           <SelectionBar selectMode={selectMode} onEnter={() => setSelectMode(true)}
             count={selected.size} onClear={exit}
-            onAddIsp={() => batchStage('isp')} onAddVpn={() => batchStage('vpn')} />
+            onAddIsp={() => batchStage('isp')} onAddVpn={() => batchStage('vpn')}
+            total={visible.length} onToggleAll={() => selectAll(visible)} />
         )}
         {histMsg && <span className="text-xs text-muted-foreground self-end pb-1">{histMsg}</span>}
         {histLines.length > 0 && (
