@@ -410,9 +410,11 @@ export default function RoutesPage() {
 
   async function flushStagedList(list) {
     const entries = getPending(list)
-    if (!entries.length) return
-    await apiFetch(`/api/routes/${list}/bulk`, { method: 'POST', body: JSON.stringify({ entries }) })
+    if (!entries.length) return true
+    const r = await apiFetch(`/api/routes/${list}/bulk`, { method: 'POST', body: JSON.stringify({ entries }) })
+    if (!r.ok) return false
     clearPending(list)
+    return true
   }
 
   async function applyRoutes() {
@@ -421,8 +423,14 @@ export default function RoutesPage() {
     try {
       // Bulk-write-then-apply: flush any staged adds (from Routes edits or Logs
       // batch-add) into the route files first, then activate via config/apply.
-      await flushStagedList('vpn')
-      await flushStagedList('isp')
+      // Only clear staged entries once the bulk write actually succeeded, so a
+      // failed write never silently discards pending routes (CR-02).
+      const okVpn = await flushStagedList('vpn')
+      const okIsp = await flushStagedList('isp')
+      if (!okVpn || !okIsp) {
+        setApplyMsg('Error: failed to save staged routes — not applied, changes kept pending')
+        return
+      }
       const r = await apiFetch('/api/config/apply', { method: 'POST' })
       const d = await r.json()
       setApplyMsg(r.ok ? '✓ Applied' : `Error: ${d.error}`)
