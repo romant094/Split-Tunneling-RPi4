@@ -224,6 +224,7 @@ echo 'НОВЫЙ_ПАРОЛЬ' | ssh pi4 "sudo tee /etc/splitgate/admin.secret"
 - **Services** — запуск/остановка/перезапуск awg0, splitgate-watch, networking, dnsmasq
 - **Routes** — добавление/удаление CIDR в vpn-routes-custom.txt и isp-routes-custom.txt; кнопка Apply перезагружает маршруты
 - **Logs** — Watch Live (SSE-стрим в реальном времени), Install Log, Watch Errors, System Journal
+- **Diagnostics** — whois-поиск по IP, traceroute, проверка решения о маршрутизации (VPN/ISP) для заданного IP
 - **Config** — редактирование ru-list-exclude.txt; ручное обновление RU-списка
 - **Settings** — редактирование /etc/splitgate/vpn-gateway.env и конфигурации AWG; смена пароля; Rollback
 

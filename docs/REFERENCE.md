@@ -876,24 +876,34 @@ All endpoints require HTTP Basic Auth. JSON request/response unless noted.
 | Method | Path | Description | Response |
 |--------|------|-------------|----------|
 | GET | /api/status | Gateway status overview | {tunnel_up, daemon_up, ru_list_updated, vpn_route_count, isp_route_count, ru_route_count} |
+| GET | /api/status/watch | Live SSE stream of /api/status (10s interval) | text/event-stream — "data: {...}\n\n" |
+| GET | /api/status/resources | CPU/memory/disk usage snapshot | {cpu_percent, mem_used, mem_total, disk_used, disk_total} |
+| GET | /api/resources/watch | Live SSE stream of /api/status/resources (5s interval) | text/event-stream — "data: {...}\n\n" |
 
 #### Services
 
 | Method | Path | Description | Response |
 |--------|------|-------------|----------|
 | GET | /api/services | List service states | [{name, status}] — status: active/inactive/failed/unknown |
-| POST | /api/services/{name}/{action} | Control service | 200 {ok:true} or 500 {error} — action: start/stop/restart |
+| GET | /api/services/watch | Live SSE stream of /api/services (5s interval) | text/event-stream — "data: [...]\n\n" |
+| POST | /api/services/{name}/{action} | Control one service | 200 {ok:true} or 500 {error} — action: start/stop/restart |
+| POST | /api/services/bulk/{action} | Control all managed services except splitgate-admin | 200 {ok:true} or 500 {ok:false, errors: [...]} — action: start/stop/restart |
 
 #### Routes
 
 | Method | Path | Description | Body / Response |
 |--------|------|-------------|-----------------|
-| GET | /api/routes/vpn | List VPN force-routes | {routes: [cidr, ...]} |
-| POST | /api/routes/vpn | Add VPN CIDR | {cidr: "x.x.x.x/n"} — 201 ok, 400 invalid, 409 duplicate |
+| GET | /api/routes/vpn | List VPN force-routes | {routes: [{cidr, description}, ...]} |
+| POST | /api/routes/vpn | Add VPN CIDR | {cidr: "x.x.x.x/n", description?} — 201 ok, 400 invalid, 409 duplicate |
+| PUT | /api/routes/vpn | Edit VPN CIDR | {old_cidr, cidr, description?} — 200 ok, 400 invalid, 404 not found, 409 duplicate |
 | DELETE | /api/routes/vpn | Remove VPN CIDR | {cidr: "x.x.x.x/n"} — 200 ok |
-| GET | /api/routes/isp | List ISP exception routes | same |
+| POST | /api/routes/vpn/bulk | Bulk-add VPN CIDRs | {entries: [{cidr, description?}, ...]} — 200 {ok:true, added: N} |
+| GET | /api/routes/isp | List ISP exception routes | same as vpn |
 | POST | /api/routes/isp | Add ISP CIDR | same as vpn |
+| PUT | /api/routes/isp | Edit ISP CIDR | same as vpn |
 | DELETE | /api/routes/isp | Remove ISP CIDR | same as vpn |
+| POST | /api/routes/isp/bulk | Bulk-add ISP CIDRs | same as vpn bulk |
+| GET | /api/routes/backup | Download combined VPN/ISP route backup as text | text/plain — comment-prefixed route dump |
 | POST | /api/config/apply | Apply routes (routing.sh --no-update) | 200 {ok:true} or 500 {error} |
 
 #### Logs
@@ -901,9 +911,18 @@ All endpoints require HTTP Basic Auth. JSON request/response unless noted.
 | Method | Path | Description | Response |
 |--------|------|-------------|----------|
 | GET | /api/logs/watch | Live SSE stream from watch-YYYY-MM-DD.log | text/event-stream — "data: LINE\n\n" |
+| GET | /api/logs/history | Historical watch log lines for a date range | ?from=YYYY-MM-DD&to=YYYY-MM-DD (max 30 days) — {lines: [...], count} or 400 |
 | GET | /api/logs/install | Last 500 lines of install.log | {lines: [...]} |
 | GET | /api/logs/watch-errors | Last 200 lines of watch-error.log | {lines: [...]} |
 | GET | /api/logs/journal | journalctl -u splitgate-watch -u awg0 -n 200 | {lines: [...]} |
+
+#### Diagnostics
+
+| Method | Path | Description | Response |
+|--------|------|-------------|----------|
+| GET | /api/diag/whois | ASN/org lookup for an IP | ?ip=x.x.x.x — {org, ...} or 400 invalid IP |
+| GET | /api/diag/traceroute | Run traceroute to a target IP | ?target=x.x.x.x — {output, lines: [...]} or 400 invalid IP, 503 traceroute not installed |
+| GET | /api/diag/route-match | Show which route (VPN/ISP/RU-direct) an IP would take | ?ip=x.x.x.x — {decision, matched_by, cidr} or 400 invalid IP |
 
 #### Config
 
@@ -918,10 +937,13 @@ All endpoints require HTTP Basic Auth. JSON request/response unless noted.
 | Method | Path | Description | Body / Response |
 |--------|------|-------------|-----------------|
 | GET | /api/settings/env | Read vpn-gateway.env (secrets masked) | {vars: {KEY: value}} |
-| PUT | /api/settings/env | Write vpn-gateway.env | {vars: {KEY: value}} |
+| PUT | /api/settings/env | Write vpn-gateway.env | {vars: {KEY: value}} — 400 on invalid key or disallowed shell metacharacters in value |
+| GET | /api/settings/awg-config | Read awg0.conf as sections/keys (secrets masked) | {sections: [{name, keys: [{key, value, masked}]}]} |
+| PUT | /api/settings/awg-config | Overwrite awg0.conf | {content: str, confirmation?} — 400 if missing [Interface], or if content has PostUp/PreUp/PostDown/PreDown hooks without {confirmation: "RUN_HOOKS"} |
 | GET | /api/settings/secrets | Read awg0.conf key-value pairs (keys masked) | {vars: {Key: value}} |
 | PUT | /api/settings/secrets | Update awg0.conf key-value pairs | {vars: {Key: value}} |
 | POST | /api/settings/password | Change admin password | {password: str} |
+| POST | /api/settings/restart-admin | Restart splitgate-admin.service (after a 1s delay) | 200 {ok:true, message} |
 | POST | /api/settings/rollback | Run vpn-rollback.sh | {confirmation: "ROLLBACK"} — 200 initiated or 400 |
 | POST | /api/auth/logout | Clear session cookie | 200 {ok:true} |
 
