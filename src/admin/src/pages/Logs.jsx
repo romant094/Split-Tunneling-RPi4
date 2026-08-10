@@ -165,6 +165,26 @@ export function LogBox({
   )
 }
 
+// Shared staging helper: brief inline confirmation after Add-to-ISP/VPN
+// (single or batch), matching the Routes page's inline-message pattern.
+function useStageActions() {
+  const [stageMsg, setStageMsg] = useState('')
+  function announce(msg) {
+    setStageMsg(msg)
+    setTimeout(() => setStageMsg(''), 3000)
+  }
+  function stage(list, cidr, org) {
+    stageAdd(list, { cidr, description: org })
+    announce(`Staged ${cidr} → ${list.toUpperCase()} (review in Routes)`)
+  }
+  function stageMany(list, entries) {
+    if (!entries.length) return
+    stageAddMany(list, entries)
+    announce(`Staged ${entries.length} route${entries.length === 1 ? '' : 's'} → ${list.toUpperCase()} (review in Routes)`)
+  }
+  return { stageMsg, stage, stageMany }
+}
+
 // Inline legend explaining the ✓/✗ status icon shown right after [VPN]/[ISP]
 // (meaning per watch-routes.py _check_conntrack docstring).
 function LogsLegend() {
@@ -290,6 +310,8 @@ export function LogsLive() {
   const [liveMeta, setLiveMeta] = useState({ connected: false, bgMode: false })
   const [filters, setFilters] = useState([''])
   const [dedupe, setDedupe] = useState(false)
+  const [ctxMenu, setCtxMenu] = useState(null)
+  const { stageMsg, stage } = useStageActions()
 
   useEffect(() => {
     const u1 = subscribeLines(setLiveLines)
@@ -301,6 +323,10 @@ export function LogsLive() {
   const filtered = applyFilters(liveLines, filters)
   const visible = dedupe ? dedupeLines(filtered) : filtered
   const filename = `splitgate-live-${format(new Date(), 'yyyy-MM-dd')}.txt`
+
+  function onRowContextMenu(e, line) {
+    setCtxMenu({ x: e.clientX, y: e.clientY, line })
+  }
 
   return (
     <div className="space-y-3">
@@ -322,7 +348,13 @@ export function LogsLive() {
       </div>
       <FilterBar filters={filters} onChange={setFilters} />
       <LogsLegend />
-      <LogBox lines={visible} colorize={true} humanTime={true} />
+      {stageMsg && <p className="text-xs text-primary">{stageMsg}</p>}
+      <LogBox lines={visible} colorize={true} humanTime={true}
+        interactive onRowContextMenu={onRowContextMenu} />
+      {ctxMenu && (
+        <LogContextMenu x={ctxMenu.x} y={ctxMenu.y} line={ctxMenu.line}
+          onClose={() => setCtxMenu(null)} onStage={stage} />
+      )}
     </div>
   )
 }
@@ -337,6 +369,12 @@ export function LogsHistory() {
   const [histLoading, setHistLoading] = useState(false)
   const [histMsg, setHistMsg] = useState('')
   const [dedupe, setDedupe] = useState(false)
+  const [ctxMenu, setCtxMenu] = useState(null)
+  const { stageMsg, stage } = useStageActions()
+
+  function onRowContextMenu(e, line) {
+    setCtxMenu({ x: e.clientX, y: e.clientY, line })
+  }
 
   async function loadHistory() {
     if (!histFromDate) { setHistMsg('Select a start date'); return }
@@ -397,8 +435,14 @@ export function LogsHistory() {
         <>
           <FilterBar filters={filters} onChange={setFilters} />
           <LogsLegend />
+          {stageMsg && <p className="text-xs text-primary">{stageMsg}</p>}
           <p className="text-xs text-muted-foreground">{visible.length} / {histLines.length} lines shown</p>
-          <LogBox lines={visible} colorize={true} humanTime={true} />
+          <LogBox lines={visible} colorize={true} humanTime={true}
+            interactive onRowContextMenu={onRowContextMenu} />
+          {ctxMenu && (
+            <LogContextMenu x={ctxMenu.x} y={ctxMenu.y} line={ctxMenu.line}
+              onClose={() => setCtxMenu(null)} onStage={stage} />
+          )}
         </>
       )}
       {histLines.length === 0 && !histLoading && (
