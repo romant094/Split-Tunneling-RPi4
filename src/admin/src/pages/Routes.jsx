@@ -7,9 +7,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { Trash2, Pencil, Plus, List, ArrowUpDown, ArrowUp, ArrowDown, Search } from 'lucide-react'
+import { Trash2, Pencil, Plus, List, ArrowUpDown, ArrowUp, ArrowDown, Search, Wand2 } from 'lucide-react'
 import DiffPreview from '../components/DiffPreview'
-import { subscribe as subscribeStaging, getPending, clearPending } from '../routeStaging'
+import {
+  subscribe as subscribeStaging, getPending, clearPending,
+  stageDescriptions, getPendingDescriptions, clearPendingDescriptions,
+} from '../routeStaging'
 
 const CIDR_RE = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/
 
@@ -263,7 +266,10 @@ function RouteSection({ endpoint }) {
   const [editEntry, setEditEntry] = useState(null)
   const [deleteEntry, setDeleteEntry] = useState(null)
   const [msg, setMsg] = useState('')
+  const [msgTone, setMsgTone] = useState('error')
   const [staged, setStaged] = useState(() => getPending(endpoint))
+  const [descEdits, setDescEdits] = useState(() => getPendingDescriptions(endpoint))
+  const [fillProgress, setFillProgress] = useState(null)
 
   function load() {
     apiFetch(`/api/routes/${endpoint}`)
@@ -275,7 +281,10 @@ function RouteSection({ endpoint }) {
   useEffect(() => { setLoading(true); load() }, [endpoint])
 
   useEffect(() => {
-    const unsub = subscribeStaging(state => setStaged(state[endpoint] || []))
+    const unsub = subscribeStaging(state => {
+      setStaged(state[endpoint] || [])
+      setDescEdits(state.descriptions?.[endpoint] || {})
+    })
     return unsub
   }, [endpoint])
 
@@ -296,7 +305,21 @@ function RouteSection({ endpoint }) {
   const additions = staged.filter(e => !existingCidrs.has(e.cidr))
   const removals = []
 
-  const filtered = routes.filter(r =>
+  // Overlay staged description edits onto the server-fetched routes so Fill
+  // Descriptions results are visible/filterable/sortable before Apply.
+  const displayRoutes = routes.map(r =>
+    descEdits[r.cidr] !== undefined ? { ...r, description: descEdits[r.cidr] } : r
+  )
+
+  const modifications = Object.entries(descEdits)
+    .filter(([cidr]) => existingCidrs.has(cidr))
+    .map(([cidr, after]) => ({
+      cidr,
+      before: routes.find(r => r.cidr === cidr)?.description || '',
+      after,
+    }))
+
+  const filtered = displayRoutes.filter(r =>
     !filter || r.cidr.includes(filter) || (r.description || '').toLowerCase().includes(filter.toLowerCase())
   )
   const sorted = [...filtered].sort((a, b) => {
@@ -306,9 +329,9 @@ function RouteSection({ endpoint }) {
   })
 
   async function handleAdd(entry) {
-    setMsg('')
+    setMsg(''); setMsgTone('error')
     const r = await apiFetch(`/api/routes/${endpoint}`, { method: 'POST', body: JSON.stringify(entry) })
-    if (!r.ok) { const d = await r.json(); setMsg(d.error); load(); return { ok: false } }
+    if (!r.ok) { const d = await r.json(); setMsg(d.error); setMsgTone('error'); load(); return { ok: false } }
     load()
     return { ok: true }
   }
@@ -321,11 +344,42 @@ function RouteSection({ endpoint }) {
   }
 
   async function handleEdit(payload) {
-    setMsg('')
+    setMsg(''); setMsgTone('error')
     const r = await apiFetch(`/api/routes/${endpoint}`, { method: 'PUT', body: JSON.stringify(payload) })
-    if (!r.ok) { const d = await r.json(); setMsg(d.error); load(); return { ok: false } }
+    if (!r.ok) { const d = await r.json(); setMsg(d.error); setMsgTone('error'); load(); return { ok: false } }
     load()
     return { ok: true }
+  }
+
+  async function fillDescriptions() {
+    const targets = sorted.filter(r => !(r.description || '').trim())
+    if (targets.length === 0) {
+      setMsg('No routes are missing a description.'); setMsgTone('info')
+      return
+    }
+    const n = targets.length
+    setFillProgress({ done: 0, total: n })
+    const results = {}
+    try {
+      let i = 0
+      for (const r of targets) {
+        try {
+          const resp = await apiFetch(`/api/diag/whois?ip=${encodeURIComponent(r.cidr.split('/')[0])}`)
+          if (resp.ok) {
+            const d = await resp.json()
+            if (d && typeof d.org === 'string' && d.org.trim()) results[r.cidr] = d.org.trim()
+          }
+        } catch {
+          // skip this cidr, keep the batch going
+        }
+        i += 1
+        setFillProgress({ done: i, total: n })
+      }
+      stageDescriptions(endpoint, results)
+      setMsg(`Filled ${Object.keys(results).length} of ${n} description(s).`); setMsgTone('info')
+    } finally {
+      setFillProgress(null)
+    }
   }
 
   async function handleDelete() {
@@ -351,15 +405,19 @@ function RouteSection({ endpoint }) {
           <Button size="sm" variant="outline" onClick={() => setAddBulk(true)}>
             <List className="h-3.5 w-3.5 mr-1" />Add List
           </Button>
+          <Button size="sm" variant="outline" onClick={fillDescriptions} disabled={!!fillProgress}>
+            <Wand2 className="h-3.5 w-3.5 mr-1" />
+            {fillProgress ? `Looking up ${fillProgress.done}/${fillProgress.total}...` : 'Fill Descriptions'}
+          </Button>
         </div>
       </div>
-      {(additions.length > 0 || removals.length > 0) && (
+      {(additions.length > 0 || removals.length > 0 || modifications.length > 0) && (
         <div className="space-y-1.5">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pending changes</p>
-          <DiffPreview additions={additions} removals={removals} />
+          <DiffPreview additions={additions} removals={removals} modifications={modifications} />
         </div>
       )}
-      {msg && <p className="text-destructive text-sm">{msg}</p>}
+      {msg && <p className={`text-sm ${msgTone === 'error' ? 'text-destructive' : 'text-muted-foreground'}`}>{msg}</p>}
       {loading ? (
         <p className="text-muted-foreground text-sm py-4">Loading…</p>
       ) : sorted.length === 0 ? (
