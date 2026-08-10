@@ -211,8 +211,14 @@ function useSelection() {
   }
   function clear() { setSelected(new Set()) }
   function exit() { setSelectMode(false); clear() }
+  function selectAll(lines) {
+    setSelected(prev => {
+      const allSelected = lines.length > 0 && lines.every(line => prev.has(line))
+      return allSelected ? new Set() : new Set(lines)
+    })
+  }
 
-  return { selectMode, setSelectMode, selected, toggle, clear, exit }
+  return { selectMode, setSelectMode, selected, toggle, clear, exit, selectAll }
 }
 
 // Selected lines -> deduped {cidr, description} entries ready for stageAddMany.
@@ -228,7 +234,7 @@ function selectedToEntries(selected) {
   return entries
 }
 
-function SelectionBar({ selectMode, onEnter, count, onClear, onAddIsp, onAddVpn }) {
+function SelectionBar({ selectMode, onEnter, count, onClear, onAddIsp, onAddVpn, total, onToggleAll }) {
   if (!selectMode) {
     return (
       <Button size="sm" variant="outline" className="h-8" onClick={onEnter}>
@@ -236,9 +242,13 @@ function SelectionBar({ selectMode, onEnter, count, onClear, onAddIsp, onAddVpn 
       </Button>
     )
   }
+  const allSelected = total > 0 && count === total
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <span className="text-xs text-muted-foreground">{count} selected</span>
+      <Button size="sm" variant="outline" className="h-8" disabled={total === 0} onClick={onToggleAll}>
+        {allSelected ? 'Deselect All' : `Select All (${total})`}
+      </Button>
       <Button size="sm" variant="outline" className="h-8" disabled={!count} onClick={onAddIsp}>
         Add {count} to ISP
       </Button>
