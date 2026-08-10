@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { HashRouter, Routes, Route, NavLink } from 'react-router-dom'
-import { Shield, LayoutDashboard, Server, Route as RouteIcon, FileText, Settings2, Cog, LogOut, Menu, X } from 'lucide-react'
+import { Shield, LayoutDashboard, Server, Route as RouteIcon, FileText, Settings2, Cog, LogOut, Menu, X, Activity } from 'lucide-react'
 import { setAuth, clearAuth, apiFetch, apiLogout, checkAuth } from './api'
 import { subscribeMeta } from './logStream'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,7 @@ import Services from './pages/Services'
 import RoutesPage from './pages/Routes'
 import LogsLayout, { LogsLive, LogsHistory, LogsInstall, LogsErrors, LogsJournal } from './pages/Logs'
 import Config from './pages/Config'
+import Diagnostics from './pages/Diagnostics'
 import Settings from './pages/Settings'
 import './App.css'
 
@@ -107,6 +108,7 @@ const NAV = [
   { to: '/services', icon: Server, label: 'Services' },
   { to: '/routes', icon: RouteIcon, label: 'Routes' },
   { to: '/logs', icon: FileText, label: 'Logs' },
+  { to: '/diagnostics', icon: Activity, label: 'Diagnostics' },
   { to: '/config', icon: Settings2, label: 'Config' },
   { to: '/settings', icon: Cog, label: 'Settings' },
 ]
@@ -219,6 +221,7 @@ export default function App() {
               <Route path="errors" element={<LogsErrors />} />
               <Route path="journal" element={<LogsJournal />} />
             </Route>
+            <Route path="/diagnostics" element={<Diagnostics />} />
             <Route path="/config" element={<Config />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
