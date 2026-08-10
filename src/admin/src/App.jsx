@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route, NavLink } from 'react-router-dom'
 import { Shield, LayoutDashboard, Server, Route as RouteIcon, FileText, Settings2, Cog, LogOut, Menu, X, Activity } from 'lucide-react'
 import { setAuth, clearAuth, apiFetch, apiLogout, checkAuth } from './api'
 import { subscribeMeta } from './logStream'
+import { useDocumentTitle, RouteTitle } from './hooks/useDocumentTitle'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,6 +20,7 @@ import Settings from './pages/Settings'
 import './App.css'
 
 function LoginForm({ onLogin }) {
+  useDocumentTitle('Sign in — Splitgate')
   const [user, setUser] = useState('admin')
   const [pass, setPass] = useState('')
   const [error, setError] = useState('')
@@ -159,6 +161,7 @@ export default function App() {
 
   return (
     <HashRouter>
+      <RouteTitle />
       <div className="min-h-screen flex flex-col">
         {/* Top nav */}
         <nav className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
