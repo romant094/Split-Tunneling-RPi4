@@ -80,13 +80,19 @@ function formatTs(line) {
   }
 }
 
-// Destination IP token appears right after "→"; convert to a /32 CIDR.
+// Normalize a dotted IPv4 to the /24 subnet containing it (zero the last octet).
+function toSubnet24(ip) {
+  const parts = ip.split('.')
+  return `${parts[0]}.${parts[1]}.${parts[2]}.0/24`
+}
+
+// Destination IP token appears right after "→"; convert to its /24 subnet CIDR.
 function extractCidr(line) {
   const arrowIdx = line.indexOf('→')
   if (arrowIdx === -1) return null
   const after = line.slice(arrowIdx + 1).trim()
   const m = after.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)
-  return m ? `${m[1]}/32` : null
+  return m ? toSubnet24(m[1]) : null
 }
 
 // Org text (if present) appears after the last " | ".
