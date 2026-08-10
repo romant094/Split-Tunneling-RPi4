@@ -91,7 +91,8 @@ function AddSingleDialog({ open, onClose, onAdd, existingCidrs }) {
     if (!isValidCidr(c)) { setErr('Invalid CIDR format (e.g. 1.2.3.0/24)'); return }
     if (existingCidrs.has(c)) { setErr('This route already exists'); return }
     setErr('')
-    await onAdd({ cidr: c, description: desc.trim() })
+    const result = await onAdd({ cidr: c, description: desc.trim() })
+    if (result && result.ok === false) return
     reset()
     onClose()
   }
@@ -186,7 +187,8 @@ function EditDialog({ open, entry, onClose, onSave, existingCidrs }) {
     if (!isValidCidr(c)) { setErr('Invalid CIDR format'); return }
     if (c !== entry.cidr && existingCidrs.has(c)) { setErr('A route with this CIDR already exists'); return }
     setErr('')
-    await onSave({ old_cidr: entry.cidr, cidr: c, description: desc.trim() })
+    const result = await onSave({ old_cidr: entry.cidr, cidr: c, description: desc.trim() })
+    if (result && result.ok === false) return
     onClose()
   }
 
@@ -299,8 +301,9 @@ function RouteSection({ endpoint }) {
   async function handleAdd(entry) {
     setMsg('')
     const r = await apiFetch(`/api/routes/${endpoint}`, { method: 'POST', body: JSON.stringify(entry) })
-    if (!r.ok) { const d = await r.json(); setMsg(d.error) }
+    if (!r.ok) { const d = await r.json(); setMsg(d.error); load(); return { ok: false } }
     load()
+    return { ok: true }
   }
 
   async function handleBulkAdd(entries) {
@@ -313,8 +316,9 @@ function RouteSection({ endpoint }) {
   async function handleEdit(payload) {
     setMsg('')
     const r = await apiFetch(`/api/routes/${endpoint}`, { method: 'PUT', body: JSON.stringify(payload) })
-    if (!r.ok) { const d = await r.json(); setMsg(d.error) }
+    if (!r.ok) { const d = await r.json(); setMsg(d.error); load(); return { ok: false } }
     load()
+    return { ok: true }
   }
 
   async function handleDelete() {
