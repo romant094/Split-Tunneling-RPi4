@@ -161,6 +161,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 | 260521-jex | Add scripts/watch-routes.py — real-time iptables log viewer with reverse DNS caching | 2026-05-21 | cf6bafa | [260521-jex-add-scripts-watch-routes-py-real-time-ip](./quick/260521-jex-add-scripts-watch-routes-py-real-time-ip/) |
 | 260603-f8c | Add deploy-routes.sh — fast custom-routes deploy (SCP + routing.sh --no-update) | 2026-06-03 | 0d0bec6 | [260603-f8c-add-deploy-routes-npm-script-create-src-](./quick/260603-f8c-add-deploy-routes-npm-script-create-src-/) |
 | 260810-ixy | Add dynamic per-page document.title in the admin SPA | 2026-08-10 | 60ac5dd | [260810-ixy-add-dynamic-per-page-document-title-in-t](./quick/260810-ixy-add-dynamic-per-page-document-title-in-t/) |
+| 260810-iym | Fix Logs page timestamps timezone — normalize watch-routes.py to UTC Z | 2026-08-10 | f759d53 | [260810-iym-fix-logs-page-timestamps-to-display-in-t](./quick/260810-iym-fix-logs-page-timestamps-to-display-in-t/) |
 
 ## Accumulated Context
 
