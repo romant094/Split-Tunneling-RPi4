@@ -158,9 +158,19 @@ function AwgConfig() {
 
   async function uploadConfig() {
     if (!uploadText.trim()) { setUploadMsg('No content to upload'); return }
+    const hasHooks = /^\s*(PostUp|PreUp|PostDown|PreDown)\s*=/im.test(uploadText)
+    let confirmation
+    if (hasHooks) {
+      const confirmed = window.confirm(
+        'This config contains PostUp/PreUp/PostDown/PreDown directives, which run shell ' +
+        'commands as root when the tunnel comes up/down. Continue uploading?'
+      )
+      if (!confirmed) return
+      confirmation = 'RUN_HOOKS'
+    }
     setUploading(true)
     setUploadMsg('')
-    const r = await apiFetch('/api/settings/awg-config', { method: 'PUT', body: JSON.stringify({ content: uploadText }) })
+    const r = await apiFetch('/api/settings/awg-config', { method: 'PUT', body: JSON.stringify({ content: uploadText, confirmation }) })
     const d = await r.json()
     if (r.ok) {
       setUploadMsg('✓ Config uploaded')

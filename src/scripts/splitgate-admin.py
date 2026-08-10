@@ -654,6 +654,8 @@ def api_settings_awg_config_get():
     except FileNotFoundError:
         return jsonify({'sections': []})
 
+AWG_HOOK_RE = re.compile(r'^\s*(PostUp|PreUp|PostDown|PreDown)\s*=', re.IGNORECASE | re.MULTILINE)
+
 @app.route('/api/settings/awg-config', methods=['PUT'])
 @require_auth
 def api_settings_awg_config_put():
@@ -661,6 +663,11 @@ def api_settings_awg_config_put():
     content = body.get('content', '').strip()
     if '[Interface]' not in content:
         return jsonify({'error': 'Invalid AWG config: missing [Interface]'}), 400
+    if AWG_HOOK_RE.search(content) and body.get('confirmation') != 'RUN_HOOKS':
+        return jsonify({
+            'error': 'Config contains PostUp/PreUp/PostDown/PreDown directives that run '
+                     'shell commands as root. Send body: {"content": ..., "confirmation": "RUN_HOOKS"} to confirm.'
+        }), 400
     with open(AWG_CONF_PATH, 'w') as fh:
         fh.write(content + '\n')
     os.chmod(AWG_CONF_PATH, 0o600)
