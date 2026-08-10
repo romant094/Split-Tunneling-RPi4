@@ -706,7 +706,8 @@ def api_settings_secrets_put():
     with open(AWG_CONF_PATH) as fh:
         content = fh.read()
     for key, val in new_vars.items():
-        content = re.sub(rf'^(\s*{re.escape(key)}\s*=\s*)(.+)$', rf'\g<1>{val}', content, flags=re.MULTILINE)
+        val_escaped = str(val).replace('\\', '\\\\')
+        content = re.sub(rf'^(\s*{re.escape(key)}\s*=\s*)(.+)$', rf'\g<1>{val_escaped}', content, flags=re.MULTILINE)
     with open(AWG_CONF_PATH, 'w') as fh:
         fh.write(content)
     os.chmod(AWG_CONF_PATH, 0o600)
