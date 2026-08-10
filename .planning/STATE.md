@@ -163,6 +163,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 | 260810-ixy | Add dynamic per-page document.title in the admin SPA | 2026-08-10 | 60ac5dd | [260810-ixy-add-dynamic-per-page-document-title-in-t](./quick/260810-ixy-add-dynamic-per-page-document-title-in-t/) |
 | 260810-iym | Fix Logs page timestamps timezone — normalize watch-routes.py to UTC Z | 2026-08-10 | f759d53 | [260810-iym-fix-logs-page-timestamps-to-display-in-t](./quick/260810-iym-fix-logs-page-timestamps-to-display-in-t/) |
 | 260810-j0k | Bulk-fill route descriptions via whois lookup on Routes page | 2026-08-10 | 0dee1b9 | [260810-j0k-bulk-fill-route-descriptions-via-whois-l](./quick/260810-j0k-bulk-fill-route-descriptions-via-whois-l/) |
+| 260810-izt | Add Select All control to Logs page multi-select mode | 2026-08-10 | 4625532 | [260810-izt-add-select-all-control-to-logs-page-mult](./quick/260810-izt-add-select-all-control-to-logs-page-mult/) |
 
 ## Accumulated Context
 
