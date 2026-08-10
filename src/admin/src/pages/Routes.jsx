@@ -13,6 +13,18 @@ import { subscribe as subscribeStaging, getPending, clearPending } from '../rout
 
 const CIDR_RE = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/
 
+// CIDR_RE only checks digit-group shape (1-3 digits per octet, 1-2 digit prefix);
+// it accepts out-of-range values like 999.999.999.999/99. isValidCidr adds octet
+// (0-255) and prefix (0-32) range checks on top (WR-05).
+function isValidCidr(cidr) {
+  if (!CIDR_RE.test(cidr)) return false
+  const [ip, prefix] = cidr.split('/')
+  const octets = ip.split('.').map(Number)
+  if (octets.some(o => o < 0 || o > 255)) return false
+  const p = Number(prefix)
+  return p >= 0 && p <= 32
+}
+
 // Registry of each RouteSection's reload() fn, keyed by endpoint (vpn/isp),
 // so RoutesPage.applyRoutes() can refresh both sections after Apply.
 const _reloaders = {}
@@ -38,9 +50,9 @@ function parseBulkText(text) {
       const idx = line.indexOf('#')
       const cidr = line.slice(0, idx).trim()
       const desc = line.slice(idx + 1).trim() || pendingComment
-      if (CIDR_RE.test(cidr)) entries.push({ cidr, description: desc })
+      if (isValidCidr(cidr)) entries.push({ cidr, description: desc })
     } else {
-      if (CIDR_RE.test(line)) entries.push({ cidr: line, description: pendingComment })
+      if (isValidCidr(line)) entries.push({ cidr: line, description: pendingComment })
     }
     pendingComment = ''
   }
@@ -57,7 +69,7 @@ function AddSingleDialog({ open, onClose, onAdd, existingCidrs }) {
 
   async function lookupOrg() {
     const c = cidr.trim()
-    if (!CIDR_RE.test(c)) return
+    if (!isValidCidr(c)) return
     if (desc.trim() !== '') return // never clobber user-entered text
     const baseIp = c.split('/')[0]
     setLookingUp(true)
@@ -76,7 +88,7 @@ function AddSingleDialog({ open, onClose, onAdd, existingCidrs }) {
 
   async function handleAdd() {
     const c = cidr.trim()
-    if (!CIDR_RE.test(c)) { setErr('Invalid CIDR format (e.g. 1.2.3.0/24)'); return }
+    if (!isValidCidr(c)) { setErr('Invalid CIDR format (e.g. 1.2.3.0/24)'); return }
     if (existingCidrs.has(c)) { setErr('This route already exists'); return }
     setErr('')
     await onAdd({ cidr: c, description: desc.trim() })
@@ -171,7 +183,7 @@ function EditDialog({ open, entry, onClose, onSave, existingCidrs }) {
 
   async function handleSave() {
     const c = cidr.trim()
-    if (!CIDR_RE.test(c)) { setErr('Invalid CIDR format'); return }
+    if (!isValidCidr(c)) { setErr('Invalid CIDR format'); return }
     if (c !== entry.cidr && existingCidrs.has(c)) { setErr('A route with this CIDR already exists'); return }
     setErr('')
     await onSave({ old_cidr: entry.cidr, cidr: c, description: desc.trim() })

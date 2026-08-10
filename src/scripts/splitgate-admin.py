@@ -34,6 +34,30 @@ SERVICE_UNIT_MAP = {
 MANAGED_SERVICES = ['awg0', 'splitgate-watch', 'splitgate-admin', 'networking', 'dnsmasq']
 CIDR_RE = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/\d{1,2}$')
 IP_RE = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
+
+
+def is_valid_cidr(s):
+    """Strict IPv4 CIDR validation (octet 0-255, prefix 0-32) — CIDR_RE alone
+    only checks digit-group shape, not value ranges (WR-05)."""
+    if not CIDR_RE.match(s):
+        return False
+    try:
+        ipaddress.IPv4Network(s, strict=False)
+        return True
+    except ValueError:
+        return False
+
+
+def is_valid_ip(s):
+    """Strict IPv4 address validation (octet 0-255) — IP_RE alone only checks
+    digit-group shape, not value ranges (WR-05)."""
+    if not IP_RE.match(s):
+        return False
+    try:
+        ipaddress.IPv4Address(s)
+        return True
+    except ValueError:
+        return False
 SECRET_KEY_RE = re.compile(r'(KEY|SECRET|PASS|TOKEN|PRIVATE)', re.IGNORECASE)
 
 app = Flask(__name__)
@@ -309,7 +333,7 @@ def api_routes_vpn_post():
     body = request.get_json(silent=True) or {}
     cidr = body.get('cidr', '').strip()
     description = body.get('description', '').strip()
-    if not CIDR_RE.match(cidr):
+    if not is_valid_cidr(cidr):
         return jsonify({'error': 'Invalid CIDR'}), 400
     entries = read_routes_with_desc(VPN_CUSTOM_ROUTES)
     if any(e['cidr'] == cidr for e in entries):
@@ -325,7 +349,7 @@ def api_routes_vpn_put():
     old_cidr = body.get('old_cidr', '').strip()
     new_cidr = body.get('cidr', '').strip()
     description = body.get('description', '').strip()
-    if not CIDR_RE.match(old_cidr) or not CIDR_RE.match(new_cidr):
+    if not is_valid_cidr(old_cidr) or not is_valid_cidr(new_cidr):
         return jsonify({'error': 'Invalid CIDR'}), 400
     entries = read_routes_with_desc(VPN_CUSTOM_ROUTES)
     if not any(e['cidr'] == old_cidr for e in entries):
@@ -341,7 +365,7 @@ def api_routes_vpn_put():
 def api_routes_vpn_delete():
     body = request.get_json(silent=True) or {}
     cidr = body.get('cidr', '').strip()
-    if not CIDR_RE.match(cidr):
+    if not is_valid_cidr(cidr):
         return jsonify({'error': 'Invalid CIDR'}), 400
     entries = read_routes_with_desc(VPN_CUSTOM_ROUTES)
     write_routes_with_desc(VPN_CUSTOM_ROUTES, [e for e in entries if e['cidr'] != cidr])
@@ -359,7 +383,7 @@ def api_routes_vpn_bulk():
     added = 0
     for entry in new_entries:
         cidr = entry.get('cidr', '').strip()
-        if not CIDR_RE.match(cidr) or cidr in existing_cidrs:
+        if not is_valid_cidr(cidr) or cidr in existing_cidrs:
             continue
         existing.append({'cidr': cidr, 'description': entry.get('description', '').strip()})
         existing_cidrs.add(cidr)
@@ -380,7 +404,7 @@ def api_routes_isp_post():
     body = request.get_json(silent=True) or {}
     cidr = body.get('cidr', '').strip()
     description = body.get('description', '').strip()
-    if not CIDR_RE.match(cidr):
+    if not is_valid_cidr(cidr):
         return jsonify({'error': 'Invalid CIDR'}), 400
     entries = read_routes_with_desc(ISP_CUSTOM_ROUTES)
     if any(e['cidr'] == cidr for e in entries):
@@ -396,7 +420,7 @@ def api_routes_isp_put():
     old_cidr = body.get('old_cidr', '').strip()
     new_cidr = body.get('cidr', '').strip()
     description = body.get('description', '').strip()
-    if not CIDR_RE.match(old_cidr) or not CIDR_RE.match(new_cidr):
+    if not is_valid_cidr(old_cidr) or not is_valid_cidr(new_cidr):
         return jsonify({'error': 'Invalid CIDR'}), 400
     entries = read_routes_with_desc(ISP_CUSTOM_ROUTES)
     if not any(e['cidr'] == old_cidr for e in entries):
@@ -412,7 +436,7 @@ def api_routes_isp_put():
 def api_routes_isp_delete():
     body = request.get_json(silent=True) or {}
     cidr = body.get('cidr', '').strip()
-    if not CIDR_RE.match(cidr):
+    if not is_valid_cidr(cidr):
         return jsonify({'error': 'Invalid CIDR'}), 400
     entries = read_routes_with_desc(ISP_CUSTOM_ROUTES)
     write_routes_with_desc(ISP_CUSTOM_ROUTES, [e for e in entries if e['cidr'] != cidr])
@@ -430,7 +454,7 @@ def api_routes_isp_bulk():
     added = 0
     for entry in new_entries:
         cidr = entry.get('cidr', '').strip()
-        if not CIDR_RE.match(cidr) or cidr in existing_cidrs:
+        if not is_valid_cidr(cidr) or cidr in existing_cidrs:
             continue
         existing.append({'cidr': cidr, 'description': entry.get('description', '').strip()})
         existing_cidrs.add(cidr)
@@ -597,7 +621,7 @@ def check_route_decision(target_ip):
 @require_auth
 def api_diag_whois():
     ip = request.args.get('ip', '')
-    if not IP_RE.match(ip):
+    if not is_valid_ip(ip):
         return jsonify({'error': 'Invalid IP'}), 400
     return jsonify(lookup_org(ip) or {})
 
@@ -605,7 +629,7 @@ def api_diag_whois():
 @require_auth
 def api_diag_traceroute():
     target = request.args.get('target', '')
-    if not IP_RE.match(target):
+    if not is_valid_ip(target):
         return jsonify({'error': 'Invalid IP'}), 400
     try:
         r = subprocess.run(['traceroute', '-n', '-w', '2', '-m', '15', target],
@@ -618,7 +642,7 @@ def api_diag_traceroute():
 @require_auth
 def api_diag_route_match():
     ip = request.args.get('ip', '')
-    if not IP_RE.match(ip):
+    if not is_valid_ip(ip):
         return jsonify({'error': 'Invalid IP'}), 400
     return jsonify(check_route_decision(ip))
 

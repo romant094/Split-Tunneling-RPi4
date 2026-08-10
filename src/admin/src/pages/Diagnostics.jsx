@@ -8,6 +8,13 @@ import { LogBox } from './Logs'
 
 const IP_RE = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/
 
+// IP_RE only checks digit-group shape; isValidIp adds octet (0-255) range
+// checks on top so inputs like 999.999.999.999 are rejected (WR-05).
+function isValidIp(ip) {
+  if (!IP_RE.test(ip)) return false
+  return ip.split('.').map(Number).every(o => o >= 0 && o <= 255)
+}
+
 function IPForm({ label, placeholder, buttonLabel, loadingLabel, onSubmit, disabled }) {
   const [ip, setIp] = useState('')
   const [validationError, setValidationError] = useState('')
@@ -15,7 +22,7 @@ function IPForm({ label, placeholder, buttonLabel, loadingLabel, onSubmit, disab
   function handleSubmit(e) {
     e.preventDefault()
     const trimmed = ip.trim()
-    if (!IP_RE.test(trimmed)) {
+    if (!isValidIp(trimmed)) {
       setValidationError('Enter a valid IPv4 address (e.g. 8.8.8.8)')
       return
     }
