@@ -295,8 +295,13 @@ def _pending_watchdog() -> None:
 # Matches journalctl short-iso lines that contain [VPN] or [ISP] iptables LOG
 # prefixes, e.g.:
 #   2026-05-21T11:36:21+0300 raspberrypi kernel: [VPN] IN=eth0 OUT=awg0 ... SRC=192.168.1.175 DST=17.248.209.64 ... PROTO=TCP ... DPT=443 ...
+# The `ts` group captures the 19-char ISO core plus an optional trailing zone
+# marker (fractional seconds, then `Z` or `±HHMM`/`±HH:MM`). The captured
+# offset is discarded by journalctl's own formatting quirks in some cases, so
+# `_to_utc_z()` re-normalizes whatever is captured into a UTC `...Z` instant
+# downstream in main() — the regex itself just needs to swallow it.
 _LOG_RE = re.compile(
-    r"^(?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})"  # ISO timestamp prefix (19 chars)
+    r"^(?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)"  # ISO timestamp + optional zone
     r"[^\[]*"                                            # anything before the tag
     r"\[(?P<tag>VPN|ISP)\]"                             # [VPN] or [ISP]
     r".*?\bSRC=(?P<src>\S+)"                            # SRC=<ip>
@@ -304,6 +309,33 @@ _LOG_RE = re.compile(
     r".*?\bPROTO=(?P<proto>\S+)"                        # PROTO=<proto>
     r"(?:.*?\bDPT=(?P<dpt>\d+))?"                       # DPT=<port> (optional — absent for ICMP)
 )
+
+
+def _to_utc_z(raw: str) -> str:
+    """Normalize a captured timestamp token to a UTC ISO instant ending in 'Z'.
+
+    Accepts offset-aware (`+0300`, `+03:00`, `Z`) or naive (host-local)
+    timestamps. Naive input is interpreted in the host's local timezone via
+    astimezone(). Never raises — a malformed token is returned unchanged so a
+    bad journalctl line can never crash the daemon loop (T-260810-01).
+    """
+    try:
+        text = raw.strip()
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        else:
+            # Insert the missing colon in a basic-format offset (+0300 -> +03:00)
+            # so datetime.fromisoformat (Python 3.11 on the RPi) accepts it.
+            m = re.match(r"^(.*\d{2}:\d{2}:\d{2}(?:\.\d+)?)([+-])(\d{2})(\d{2})$", text)
+            if m:
+                text = f"{m.group(1)}{m.group(2)}{m.group(3)}:{m.group(4)}"
+        dt = datetime.datetime.fromisoformat(text)
+        if dt.tzinfo is None:
+            dt = dt.astimezone()
+        dt_utc = dt.astimezone(datetime.timezone.utc)
+        return dt_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+    except (ValueError, TypeError, OSError):
+        return raw
 
 
 def format_line(ts: str, tag: str, src: str, dst: str, proto: str, dpt: str, no_dns: bool, *, enable_asn: bool = True) -> str:
@@ -416,7 +448,7 @@ def main() -> None:
             dst = m.group("dst")
             proto = m.group("proto")
             dpt = m.group("dpt") or "-"
-            ts = m.group("ts")
+            ts = _to_utc_z(m.group("ts"))
 
             # Apply --tag filter
             if args.tag != "both" and tag != args.tag:
