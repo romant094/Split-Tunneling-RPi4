@@ -382,7 +382,9 @@ def api_routes_vpn_bulk():
     existing_cidrs = {e['cidr'] for e in existing}
     added = 0
     for entry in new_entries:
-        cidr = entry.get('cidr', '').strip()
+        if not isinstance(entry, dict):
+            continue
+        cidr = str(entry.get('cidr', '')).strip()
         if not is_valid_cidr(cidr) or cidr in existing_cidrs:
             continue
         existing.append({'cidr': cidr, 'description': entry.get('description', '').strip()})
@@ -453,7 +455,9 @@ def api_routes_isp_bulk():
     existing_cidrs = {e['cidr'] for e in existing}
     added = 0
     for entry in new_entries:
-        cidr = entry.get('cidr', '').strip()
+        if not isinstance(entry, dict):
+            continue
+        cidr = str(entry.get('cidr', '')).strip()
         if not is_valid_cidr(cidr) or cidr in existing_cidrs:
             continue
         existing.append({'cidr': cidr, 'description': entry.get('description', '').strip()})
