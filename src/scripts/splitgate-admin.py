@@ -37,7 +37,20 @@ IP_RE = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
 SECRET_KEY_RE = re.compile(r'(KEY|SECRET|PASS|TOKEN|PRIVATE)', re.IGNORECASE)
 
 app = Flask(__name__)
-_sessions = set()  # in-memory session tokens; resets on service restart
+_sessions = {}  # token -> created_at (epoch seconds); in-memory, resets on service restart
+SESSION_MAX_AGE = 60 * 60 * 24 * 30  # 30 days, matches cookie max_age
+SESSION_MAX_COUNT = 1000  # hard cap; evict oldest first if exceeded
+
+
+def _prune_sessions():
+    now = time.time()
+    expired = [t for t, created in _sessions.items() if now - created > SESSION_MAX_AGE]
+    for t in expired:
+        del _sessions[t]
+    if len(_sessions) > SESSION_MAX_COUNT:
+        oldest = sorted(_sessions.items(), key=lambda kv: kv[1])[:len(_sessions) - SESSION_MAX_COUNT]
+        for t, _ in oldest:
+            del _sessions[t]
 
 
 def require_auth(f):
@@ -56,8 +69,9 @@ def require_auth(f):
             return Response('Unauthorized', 401)
         if not secrets.compare_digest(auth.password.encode(), stored_pw.encode()):
             return Response('Unauthorized', 401)
+        _prune_sessions()
         session_token = secrets.token_hex(16)
-        _sessions.add(session_token)
+        _sessions[session_token] = time.time()
         inner_result = f(*args, **kwargs)
         resp = make_response(inner_result)
         # 30-day Max-Age so the cookie survives browser restarts (D-01: Phase 15 D-09
@@ -800,7 +814,7 @@ def api_settings_password():
 def api_auth_logout():
     token = request.cookies.get('sg_session')
     if token:
-        _sessions.discard(token)
+        _sessions.pop(token, None)
     resp = make_response(jsonify({'ok': True}))
     resp.set_cookie('sg_session', '', expires=0, httponly=True, samesite='Strict', path='/')
     return resp
