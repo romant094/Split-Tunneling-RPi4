@@ -611,14 +611,19 @@ def api_settings_env_get():
     data = parse_env_file(ENV_PATH)
     return jsonify({'vars': {k: mask_value(k, v) for k, v in data.items()}})
 
+ENV_VALUE_RE = re.compile(r'^[^\n\r;&|`$(){}<>]*$')  # no shell metacharacters, no newlines
+
 @app.route('/api/settings/env', methods=['PUT'])
 @require_auth
 def api_settings_env_put():
     body = request.get_json(silent=True) or {}
     new_vars = body.get('vars', {})
     KEY_RE = re.compile(r'^[A-Z][A-Z0-9_]*$')
-    if any(not KEY_RE.match(k) for k in new_vars):
-        return jsonify({'error': 'Invalid key format'}), 400
+    for k, v in new_vars.items():
+        if not KEY_RE.match(k):
+            return jsonify({'error': f'Invalid key format: {k}'}), 400
+        if not ENV_VALUE_RE.match(str(v)):
+            return jsonify({'error': f'Invalid value for {k}: contains disallowed characters'}), 400
     current = parse_env_file(ENV_PATH)
     current.update(new_vars)
     write_env_file(ENV_PATH, current)
