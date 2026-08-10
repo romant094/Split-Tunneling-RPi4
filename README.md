@@ -224,7 +224,7 @@ echo 'NEWPASSWORD' | ssh pi4 "sudo tee /etc/splitgate/admin.secret"
 **Pages:**
 - **Dashboard** — VPN tunnel status, daemon state, RU list age, route counts (auto-refreshes 10s)
 - **Services** — start/stop/restart awg0, splitgate-watch, networking, dnsmasq
-- **Routes** — add/remove CIDRs in vpn-routes-custom.txt and isp-routes-custom.txt; Apply button reloads routes
+- **Routes** — add/remove CIDRs in vpn-routes-custom.txt and isp-routes-custom.txt; Apply button reloads routes. **Fill Descriptions** button bulk-resolves org names for every listed route with an empty description, reusing the same whois/ASN lookup as single-route add. Lookups run one at a time (can take a while for long lists) and stage the results as pending `~` diff entries — nothing is written to the route files until Apply Changes.
 - **Logs** — Watch Live (real-time SSE stream), Install Log, Watch Errors, System Journal
 - **Config** — edit ru-list-exclude.txt; trigger manual RU list refresh
 - **Settings** — edit /etc/splitgate/vpn-gateway.env and AWG config; change admin password; Rollback

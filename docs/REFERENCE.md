@@ -910,6 +910,15 @@ All endpoints require HTTP Basic Auth. JSON request/response unless noted.
 | GET | /api/routes/backup | Download combined VPN/ISP route backup as text | text/plain — comment-prefixed route dump |
 | POST | /api/config/apply | Apply routes (routing.sh --no-update) | 200 {ok:true} or 500 {error} |
 
+**Fill Descriptions (frontend):** the Routes page toolbar has a "Fill Descriptions" button that
+bulk-resolves org names for every listed route with an empty description, reusing
+`GET /api/diag/whois` (the same lookup as single-route add). Lookups run strictly sequentially
+(one `whois` call at a time — each spawns `asn-lookup.py` on the RPi, so batches over a handful
+of routes can take a while) and a failed/empty lookup is skipped without aborting the batch.
+Results are staged client-side and shown as `~ cidr # description` in the Pending changes diff;
+nothing is written until Apply Changes, which flushes staged descriptions via
+`PUT /api/routes/{list}` before calling `/api/config/apply`.
+
 #### Logs
 
 | Method | Path | Description | Response |
