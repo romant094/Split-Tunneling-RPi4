@@ -399,7 +399,7 @@ Plans:
 - UI-BACKUP: Export/download current ISP + VPN custom route lists as a backup file.
 - UI-DEPLOY: deploy.sh must not overwrite existing config files on redeploy — preserve local edits.
 **Depends on:** Phase 15
-**Plans:** 4/7 plans executed
+**Plans:** 6/7 plans executed
 
 Plans:
 
@@ -412,8 +412,8 @@ Plans:
 
 **Wave 2 (after Wave 1):**
 
-- [ ] 16-05-PLAN.md — routeStaging.js shared store + DiffPreview.jsx + Routes.jsx diff-preview/auto-org-lookup/backup button [UI-ADDROUTE, UI-BACKUP, UI-LOGS] (depends 16-01)
-- [ ] 16-06-PLAN.md — Diagnostics.jsx page (whois/traceroute/route-match) + App.jsx route/nav [UI-DIAG] (depends 16-01, 16-03)
+- [x] 16-05-PLAN.md — routeStaging.js shared store + DiffPreview.jsx + Routes.jsx diff-preview/auto-org-lookup/backup button [UI-ADDROUTE, UI-BACKUP, UI-LOGS] (depends 16-01)
+- [x] 16-06-PLAN.md — Diagnostics.jsx page (whois/traceroute/route-match) + App.jsx route/nav [UI-DIAG] (depends 16-01, 16-03)
 
 **Wave 3 (after Wave 2):**
 
