@@ -19,6 +19,10 @@ VPN_CUSTOM_ROUTES = '/etc/splitgate/vpn-routes-custom.txt'
 ISP_CUSTOM_ROUTES = '/etc/splitgate/isp-routes-custom.txt'
 RU_EXCLUDE_PATH = '/etc/splitgate/ru-list-exclude.txt'
 LAST_APPLY_PATH = '/etc/splitgate/.last-apply'
+# Per-day tail cap for /api/logs/history. The endpoint reports the true line
+# total alongside the capped tail so the UI never presents a truncated day as
+# complete. Raised from 5000 once the log view became virtualized.
+HISTORY_DAY_CAP = 50000
 ENV_PATH = '/etc/splitgate/vpn-gateway.env'
 AWG_CONF_PATH = '/etc/amnezia/amneziawg/awg0.conf'
 LOG_DIR = '/etc/splitgate/logs'
@@ -216,6 +220,19 @@ def tail_file(path, n=200):
             return [line.rstrip() for line in deque(fh, maxlen=n)]
     except FileNotFoundError:
         return []
+
+
+def count_lines(path):
+    """Total line count for a log file — pairs with tail_file to report truncation.
+
+    Streams the file so a large day never lands a second full copy in memory on
+    the RPi; tail_file already holds at most n lines via deque(maxlen=n).
+    """
+    try:
+        with open(path, 'rb') as fh:
+            return sum(1 for _ in fh)
+    except FileNotFoundError:
+        return 0
 
 
 @app.route('/api/status')
@@ -577,13 +594,24 @@ def api_logs_history():
         return jsonify({'error': 'End date must be >= start date'}), 400
     if (to_date - from_date).days > 30:
         return jsonify({'error': 'Date range too large (max 30 days)'}), 400
+    # Per-day tail cap. The response also carries the true line total so the
+    # client can say "5000 of 12483" instead of rendering a truncated tail as if
+    # it were the whole day.
     all_lines = []
+    total = 0
     current = from_date
     while current <= to_date:
         log_path = f'{LOG_DIR}/watch-{current.strftime("%Y-%m-%d")}.log'
-        all_lines.extend(tail_file(log_path, n=5000))
+        all_lines.extend(tail_file(log_path, n=HISTORY_DAY_CAP))
+        total += count_lines(log_path)
         current += timedelta(days=1)
-    return jsonify({'lines': all_lines, 'count': len(all_lines)})
+    return jsonify({
+        'lines': all_lines,
+        'count': len(all_lines),
+        'total': total,
+        'truncated': total > len(all_lines),
+        'day_cap': HISTORY_DAY_CAP,
+    })
 
 @app.route('/api/logs/install')
 @require_auth
