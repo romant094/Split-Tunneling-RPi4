@@ -8,8 +8,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Download, Plus, X, Filter, EyeOff, Copy, CalendarIcon, MousePointerClick } from 'lucide-react'
+import { Download, Plus, X, Filter, EyeOff, Copy, ChevronDown, CalendarIcon, MousePointerClick } from 'lucide-react'
 import { setOnPage, setBgMode as setStreamBgMode, subscribeLines, subscribeMeta, clearLines } from '../logStream'
 import { stageAdd, stageAddMany } from '../routeStaging'
 import { cn } from '@/lib/utils'
@@ -372,9 +373,12 @@ function SelectionBar({ selectMode, onEnter, count, routeCount, onClear, onAddIs
         {count} selected
         {count !== routeCount && <> → {routeCount} route{routeCount === 1 ? '' : 's'}</>}
       </span>
-      <Button size="sm" variant="outline" className="h-8" disabled={total === 0} onClick={onToggleAll}>
-        {allSelected ? 'Deselect All' : `Select All (${total})`}
-      </Button>
+      <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
+        <Checkbox checked={allSelected} indeterminate={count > 0 && !allSelected}
+          disabled={total === 0} onChange={onToggleAll}
+          aria-label={`Select all ${total} visible lines`} />
+        Select all ({total})
+      </label>
       <Button size="sm" variant="outline" className="h-8" disabled={!routeCount} onClick={onAddIsp}>
         Add {routeCount} to ISP
       </Button>
@@ -383,6 +387,75 @@ function SelectionBar({ selectMode, onEnter, count, routeCount, onClear, onAddIs
       </Button>
       <Button size="sm" variant="ghost" className="h-8" onClick={onClear}>Clear selection</Button>
     </div>
+  )
+}
+
+// Turns the whole visible (filtered) view into staged routes without going
+// through select mode — "I have narrowed the view down to what I want, take all
+// of it". Two steps on purpose: the dropdown picks the destination list, then a
+// dialog states the route count. Unfiltered, the visible set can be thousands of
+// lines and hundreds of /24s, so the number has to be seen before it commits.
+function AddAllButton({ lines, onStageMany }) {
+  const [open, setOpen] = useState(false)
+  const [target, setTarget] = useState(null)   // 'isp' | 'vpn' | null
+
+  const entries = selectedToEntries(lines)
+
+  function confirm() {
+    onStageMany(target, entries)
+    setTarget(null)
+  }
+
+  return (
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button size="sm" variant="outline" className="h-8" disabled={!entries.length}
+            title={entries.length
+              ? `Stage all ${entries.length} route(s) from the current view`
+              : 'Nothing in the current view resolves to a route'}>
+            <Plus className="h-3.5 w-3.5 mr-1" />Add all
+            <ChevronDown className="h-3.5 w-3.5 ml-1" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-52 p-1">
+          <button className="w-full text-left px-2 py-1.5 text-sm rounded hover:bg-accent cursor-pointer"
+            onClick={() => { setOpen(false); setTarget('isp') }}>
+            Add to ISP routes
+          </button>
+          <button className="w-full text-left px-2 py-1.5 text-sm rounded hover:bg-accent cursor-pointer"
+            onClick={() => { setOpen(false); setTarget('vpn') }}>
+            Add to VPN routes
+          </button>
+        </PopoverContent>
+      </Popover>
+
+      <Dialog open={!!target} onOpenChange={v => { if (!v) setTarget(null) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add {entries.length} route{entries.length === 1 ? '' : 's'} to {(target || '').toUpperCase()}</DialogTitle>
+            <DialogDescription>
+              {lines.length} visible line{lines.length === 1 ? '' : 's'} → {entries.length} route
+              {entries.length === 1 ? '' : 's'}, since destinations in the same /24 collapse into one.
+              These are staged only — review them under Pending changes on the Routes page and click
+              Apply Changes to activate.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-56 overflow-y-auto rounded-md border border-border bg-muted/40 p-2 text-xs space-y-0.5">
+            {entries.map(e => (
+              <div key={e.cidr} className="flex gap-2">
+                <span className="font-mono shrink-0">{e.cidr}</span>
+                <span className="text-muted-foreground truncate">{e.description || '—'}</span>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTarget(null)}>Cancel</Button>
+            <Button onClick={confirm}>Add {entries.length} route{entries.length === 1 ? '' : 's'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
@@ -562,6 +635,7 @@ export function LogsLive() {
           count={selected.size} routeCount={selectedToEntries(selected).length} onClear={exit}
           onAddIsp={() => batchStage('isp')} onAddVpn={() => batchStage('vpn')}
           total={visible.length} onToggleAll={() => selectAll(visible)} />
+        <AddAllButton lines={visible} onStageMany={stageMany} />
         <span className="text-muted-foreground text-xs ml-auto">{visible.length} / {liveLines.length} lines</span>
         <CopyLinesButton lines={visible} className="h-8" />
         <Button size="sm" variant="ghost" className="h-8" onClick={() => downloadLines(visible, filename)}>
@@ -663,6 +737,9 @@ export function LogsHistory() {
             count={selected.size} routeCount={selectedToEntries(selected).length} onClear={exit}
             onAddIsp={() => batchStage('isp')} onAddVpn={() => batchStage('vpn')}
             total={visible.length} onToggleAll={() => selectAll(visible)} />
+        )}
+        {histLines.length > 0 && (
+          <AddAllButton lines={visible} onStageMany={stageMany} />
         )}
         {histMsg && <span className="text-xs text-muted-foreground self-end pb-1">{histMsg}</span>}
         {histLines.length > 0 && (
