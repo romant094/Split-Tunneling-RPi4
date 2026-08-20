@@ -15,5 +15,8 @@ src/configs/ru-exclude.txt
 __pycache__/
 *.pyc
 
+# macOS Finder metadata
+.DS_Store
+
 logs
 /package.json
