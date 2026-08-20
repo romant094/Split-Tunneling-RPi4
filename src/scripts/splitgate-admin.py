@@ -42,15 +42,43 @@ IP_RE = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
 
 
 def is_valid_cidr(s):
-    """Strict IPv4 CIDR validation (octet 0-255, prefix 0-32) — CIDR_RE alone
-    only checks digit-group shape, not value ranges (WR-05)."""
+    """Strict IPv4 CIDR validation — CIDR_RE alone only checks digit-group shape,
+    not value ranges (WR-05).
+
+    strict=True on purpose: the prefix must be a real network address with zero
+    host bits. `172.217.20.0/16` parses fine with strict=False but iproute2
+    rejects it ("Invalid prefix for given prefix length"), so accepting it here
+    just moves the failure to routing.sh, where it is far less visible. See
+    cidr_hint() for the accompanying error message.
+    """
     if not CIDR_RE.match(s):
         return False
     try:
-        ipaddress.IPv4Network(s, strict=False)
+        ipaddress.IPv4Network(s, strict=True)
         return True
     except ValueError:
         return False
+
+
+def cidr_hint(s):
+    """Error text for a rejected CIDR, naming the intended network when we can.
+
+    A bare "invalid CIDR" on `172.217.20.0/16` is unhelpful — the octets and the
+    prefix are individually fine and only their combination is wrong.
+    """
+    if not CIDR_RE.match(s):
+        return f'Invalid CIDR format: {s} (expected x.x.x.x/n)'
+    try:
+        ipaddress.IPv4Network(s, strict=True)
+        return ''
+    except ValueError:
+        pass
+    try:
+        net = ipaddress.IPv4Network(s, strict=False)
+        return (f'{s} is not a network address — host bits are set. '
+                f'Did you mean {net.with_prefixlen}?')
+    except ValueError:
+        return f'Invalid CIDR: {s}'
 
 
 def is_valid_ip(s):
@@ -381,7 +409,7 @@ def api_routes_vpn_post():
     cidr = body.get('cidr', '').strip()
     description = body.get('description', '').strip()
     if not is_valid_cidr(cidr):
-        return jsonify({'error': 'Invalid CIDR'}), 400
+        return jsonify({'error': cidr_hint(cidr)}), 400
     entries = read_routes_with_desc(VPN_CUSTOM_ROUTES)
     if any(e['cidr'] == cidr for e in entries):
         return jsonify({'error': 'Already exists'}), 409
@@ -397,7 +425,8 @@ def api_routes_vpn_put():
     new_cidr = body.get('cidr', '').strip()
     description = body.get('description', '').strip()
     if not is_valid_cidr(old_cidr) or not is_valid_cidr(new_cidr):
-        return jsonify({'error': 'Invalid CIDR'}), 400
+        bad = old_cidr if not is_valid_cidr(old_cidr) else new_cidr
+        return jsonify({'error': cidr_hint(bad)}), 400
     entries = read_routes_with_desc(VPN_CUSTOM_ROUTES)
     if not any(e['cidr'] == old_cidr for e in entries):
         return jsonify({'error': 'Route not found'}), 404
@@ -413,7 +442,7 @@ def api_routes_vpn_delete():
     body = request.get_json(silent=True) or {}
     cidr = body.get('cidr', '').strip()
     if not is_valid_cidr(cidr):
-        return jsonify({'error': 'Invalid CIDR'}), 400
+        return jsonify({'error': cidr_hint(cidr)}), 400
     entries = read_routes_with_desc(VPN_CUSTOM_ROUTES)
     write_routes_with_desc(VPN_CUSTOM_ROUTES, [e for e in entries if e['cidr'] != cidr])
     return jsonify({'ok': True})
@@ -454,7 +483,7 @@ def api_routes_isp_post():
     cidr = body.get('cidr', '').strip()
     description = body.get('description', '').strip()
     if not is_valid_cidr(cidr):
-        return jsonify({'error': 'Invalid CIDR'}), 400
+        return jsonify({'error': cidr_hint(cidr)}), 400
     entries = read_routes_with_desc(ISP_CUSTOM_ROUTES)
     if any(e['cidr'] == cidr for e in entries):
         return jsonify({'error': 'Already exists'}), 409
@@ -470,7 +499,8 @@ def api_routes_isp_put():
     new_cidr = body.get('cidr', '').strip()
     description = body.get('description', '').strip()
     if not is_valid_cidr(old_cidr) or not is_valid_cidr(new_cidr):
-        return jsonify({'error': 'Invalid CIDR'}), 400
+        bad = old_cidr if not is_valid_cidr(old_cidr) else new_cidr
+        return jsonify({'error': cidr_hint(bad)}), 400
     entries = read_routes_with_desc(ISP_CUSTOM_ROUTES)
     if not any(e['cidr'] == old_cidr for e in entries):
         return jsonify({'error': 'Route not found'}), 404
@@ -486,7 +516,7 @@ def api_routes_isp_delete():
     body = request.get_json(silent=True) or {}
     cidr = body.get('cidr', '').strip()
     if not is_valid_cidr(cidr):
-        return jsonify({'error': 'Invalid CIDR'}), 400
+        return jsonify({'error': cidr_hint(cidr)}), 400
     entries = read_routes_with_desc(ISP_CUSTOM_ROUTES)
     write_routes_with_desc(ISP_CUSTOM_ROUTES, [e for e in entries if e['cidr'] != cidr])
     return jsonify({'ok': True})

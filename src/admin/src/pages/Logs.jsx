@@ -158,6 +158,28 @@ function extractOrg(line) {
 // the one under the cursor. `batchLines` is null for the single-line case.
 function LogContextMenu({ x, y, line, batchLines, onClose, onStage, onStageMany }) {
   const ref = useRef(null)
+  // Placed after mount from the menu's measured size: right-clicking the last row
+  // of the log box put the menu below the fold, so its lower items could not be
+  // reached at all. Flip it above the cursor when it would overflow, and clamp
+  // horizontally for the same reason.
+  // `ready` keeps the menu hidden for the first paint only, while its size is
+  // measured — otherwise it visibly jumps from the cursor to its corrected spot.
+  const [pos, setPos] = useState({ top: y, left: x, ready: false })
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const { width, height } = el.getBoundingClientRect()
+    const margin = 8
+    const top = y + height + margin > window.innerHeight
+      ? Math.max(margin, y - height)
+      : y
+    const left = x + width + margin > window.innerWidth
+      ? Math.max(margin, x - width)
+      : x
+    setPos({ top, left, ready: true })
+  }, [x, y])
+
   useEffect(() => {
     function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) onClose() }
     function handleKey(e) { if (e.key === 'Escape') onClose() }
@@ -195,7 +217,7 @@ function LogContextMenu({ x, y, line, batchLines, onClose, onStage, onStageMany 
 
   return (
     <div ref={ref} className="fixed z-50 min-w-56 rounded-md border border-border bg-popover text-popover-foreground shadow-md py-1 text-sm"
-      style={{ top: y, left: x }}>
+      style={{ top: pos.top, left: pos.left, visibility: pos.ready ? 'visible' : 'hidden' }}>
       <button className="w-full text-left px-3 py-1.5 hover:bg-accent cursor-pointer" onClick={copy}>
         {batch ? `Copy ${batch.length} lines` : 'Copy'}
       </button>
@@ -379,7 +401,7 @@ function selectedToEntries(selected) {
   return entries
 }
 
-function SelectionBar({ selectMode, onEnter, count, routeCount, onClear, onAddIsp, onAddVpn, total, onToggleAll }) {
+function SelectionBar({ selectMode, onEnter, count, routeCount, onClear, total, onToggleAll }) {
   if (!selectMode) {
     return (
       <Button size="sm" variant="outline" className="h-8" onClick={onEnter}>
@@ -388,9 +410,9 @@ function SelectionBar({ selectMode, onEnter, count, routeCount, onClear, onAddIs
     )
   }
   const allSelected = total > 0 && count === total
-  // The buttons promise routeCount, not count: selectedToEntries collapses each
-  // destination to its /24, so several selected lines from one subnet stage a
-  // single route. Labelling the line count made the button overstate the result.
+  // No Add buttons here: "Add all" is the single add entry point and switches to
+  // the selection whenever there is one. Two competing add paths side by side
+  // just crowded the toolbar.
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <span className="text-xs text-muted-foreground">
@@ -403,12 +425,6 @@ function SelectionBar({ selectMode, onEnter, count, routeCount, onClear, onAddIs
           aria-label={`Select all ${total} visible lines`} />
         Select all ({total})
       </label>
-      <Button size="sm" variant="outline" className="h-8" disabled={!routeCount} onClick={onAddIsp}>
-        Add {routeCount} to ISP
-      </Button>
-      <Button size="sm" variant="outline" className="h-8" disabled={!routeCount} onClick={onAddVpn}>
-        Add {routeCount} to VPN
-      </Button>
       <Button size="sm" variant="ghost" className="h-8" onClick={onClear}>Clear selection</Button>
     </div>
   )
@@ -419,7 +435,7 @@ function SelectionBar({ selectMode, onEnter, count, routeCount, onClear, onAddIs
 // of it". Two steps on purpose: the dropdown picks the destination list, then a
 // dialog states the route count. Unfiltered, the visible set can be thousands of
 // lines and hundreds of /24s, so the number has to be seen before it commits.
-function AddAllButton({ lines, onStageMany }) {
+function AddAllButton({ lines, selected, onStageMany }) {
   const [open, setOpen] = useState(false)
   const [target, setTarget] = useState(null)   // 'isp' | 'vpn' | null
   // Read once per dialog open rather than on every render, so the checkbox is a
@@ -430,7 +446,12 @@ function AddAllButton({ lines, onStageMany }) {
   // paths, so it can have changed since this component mounted.
   useEffect(() => { if (target) setApplyNow(getApplyImmediately()) }, [target])
 
-  const entries = selectedToEntries(lines)
+  // A selection is a narrower statement of intent than the filtered view, so it
+  // wins when present. This is also why SelectionBar no longer carries its own
+  // Add buttons — one add path, one place to look.
+  const fromSelection = selected && selected.size > 0
+  const sourceLines = fromSelection ? [...selected] : lines
+  const entries = selectedToEntries(sourceLines)
 
   function confirm() {
     setApplyImmediately(applyNow)
@@ -444,9 +465,10 @@ function AddAllButton({ lines, onStageMany }) {
         <PopoverTrigger asChild>
           <Button size="sm" variant="outline" className="h-8" disabled={!entries.length}
             title={entries.length
-              ? `Stage all ${entries.length} route(s) from the current view`
-              : 'Nothing in the current view resolves to a route'}>
+              ? `Add ${entries.length} route(s) from ${fromSelection ? `the ${selected.size} selected line(s)` : 'the current view'}`
+              : `Nothing in ${fromSelection ? 'the selection' : 'the current view'} resolves to a route`}>
             <Plus className="h-3.5 w-3.5 mr-1" />Add all
+            {!!entries.length && <span className="ml-1 text-muted-foreground">({entries.length})</span>}
             <ChevronDown className="h-3.5 w-3.5 ml-1" />
           </Button>
         </PopoverTrigger>
@@ -467,7 +489,7 @@ function AddAllButton({ lines, onStageMany }) {
           <DialogHeader>
             <DialogTitle>Add {entries.length} route{entries.length === 1 ? '' : 's'} to {(target || '').toUpperCase()}</DialogTitle>
             <DialogDescription>
-              {lines.length} visible line{lines.length === 1 ? '' : 's'} → {entries.length} route
+              {sourceLines.length} {fromSelection ? 'selected' : 'visible'} line{sourceLines.length === 1 ? '' : 's'} → {entries.length} route
               {entries.length === 1 ? '' : 's'}, since destinations in the same /24 collapse into one.
               {applyNow
                 ? ' They will be written and activated right away — routing.sh runs on the RPi.'
@@ -501,6 +523,26 @@ function AddAllButton({ lines, onStageMany }) {
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+// Counter on the left, Copy/Download on the right, sitting directly above the log
+// box. These used to live in the top toolbar, which pushed them onto a second row
+// once Select and Add all were added — and put the line count far away from the
+// lines it counts.
+function LogBoxBar({ shown, total, lines, filename, note }) {
+  return (
+    <div className="flex items-center justify-between gap-2 flex-wrap">
+      <span className="text-xs text-muted-foreground">
+        {shown} / {total} lines shown{note}
+      </span>
+      <div className="flex items-center gap-1">
+        <CopyLinesButton lines={lines} className="h-8" />
+        <Button size="sm" variant="ghost" className="h-8" onClick={() => downloadLines(lines, filename)}>
+          <Download className="h-3.5 w-3.5 mr-1" />Download
+        </Button>
+      </div>
+    </div>
   )
 }
 
@@ -678,19 +720,14 @@ export function LogsLive() {
         </Button>
         <SelectionBar selectMode={selectMode} onEnter={() => setSelectMode(true)}
           count={selected.size} routeCount={selectedToEntries(selected).length} onClear={exit}
-          onAddIsp={() => batchStage('isp')} onAddVpn={() => batchStage('vpn')}
           total={visible.length} onToggleAll={() => selectAll(visible)} />
-        <AddAllButton lines={visible} onStageMany={stageMany} />
-        <span className="text-muted-foreground text-xs ml-auto">{visible.length} / {liveLines.length} lines</span>
-        <CopyLinesButton lines={visible} className="h-8" />
-        <Button size="sm" variant="ghost" className="h-8" onClick={() => downloadLines(visible, filename)}>
-          <Download className="h-3.5 w-3.5 mr-1" />Download
-        </Button>
+        <AddAllButton lines={visible} selected={selected} onStageMany={stageMany} />
       </div>
       <FilterBar filters={filters} onChange={setFilters} />
       <FilterBar filters={excludes} onChange={setExcludes} mode="exclude" />
       <LogsLegend />
       {stageMsg && <p className={`text-xs ${stageErr ? 'text-destructive' : 'text-primary'}`}>{stageMsg}</p>}
+      <LogBoxBar shown={visible.length} total={liveLines.length} lines={visible} filename={filename} />
       <LogBox lines={visible} colorize={true} humanTime={true}
         interactive selectMode={selectMode} selected={selected} onToggleSelect={toggle}
         onRowContextMenu={onRowContextMenu} />
@@ -740,7 +777,9 @@ export function LogsHistory() {
       if (!r.ok) { setHistMsg(d.error || 'Error'); setHistLoading(false); return }
       setHistLines(d.lines || [])
       setHistMeta({ total: d.total, truncated: d.truncated, dayCap: d.day_cap })
-      setHistMsg(d.lines?.length ? `${d.lines.length} lines` : `No log data for ${fromDate}${toDate !== fromDate ? ` – ${toDate}` : ''}`)
+      // No success text: the count now lives in the bar directly above the log
+      // box, and repeating it in the toolbar was what pushed that row over.
+      setHistMsg(d.lines?.length ? '' : `No log data for ${fromDate}${toDate !== fromDate ? ` – ${toDate}` : ''}`)
     } catch { setHistMsg('Connection error') }
     setHistLoading(false)
   }
@@ -780,22 +819,12 @@ export function LogsHistory() {
         {histLines.length > 0 && (
           <SelectionBar selectMode={selectMode} onEnter={() => setSelectMode(true)}
             count={selected.size} routeCount={selectedToEntries(selected).length} onClear={exit}
-            onAddIsp={() => batchStage('isp')} onAddVpn={() => batchStage('vpn')}
             total={visible.length} onToggleAll={() => selectAll(visible)} />
         )}
         {histLines.length > 0 && (
-          <AddAllButton lines={visible} onStageMany={stageMany} />
+          <AddAllButton lines={visible} selected={selected} onStageMany={stageMany} />
         )}
         {histMsg && <span className="text-xs text-muted-foreground self-end pb-1">{histMsg}</span>}
-        {histLines.length > 0 && (
-          <div className="flex items-center gap-2 self-end ml-auto">
-            <CopyLinesButton lines={visible} className="h-8" />
-            <Button size="sm" variant="ghost" className="h-8"
-              onClick={() => downloadLines(visible, filename)}>
-              <Download className="h-3.5 w-3.5 mr-1" />Download
-            </Button>
-          </div>
-        )}
       </div>
       {histLines.length > 0 && (
         <>
@@ -803,13 +832,10 @@ export function LogsHistory() {
           <FilterBar filters={excludes} onChange={setExcludes} mode="exclude" />
           <LogsLegend />
           {stageMsg && <p className={`text-xs ${stageErr ? 'text-destructive' : 'text-primary'}`}>{stageMsg}</p>}
-          <p className="text-xs text-muted-foreground">
-            {visible.length} / {histLines.length} lines shown
-            {histMeta?.truncated && (
-              <> — loaded the last {histLines.length} of {histMeta.total} logged
-                {histMeta.dayCap ? ` (capped at ${histMeta.dayCap} per day)` : ''}</>
-            )}
-          </p>
+          <LogBoxBar shown={visible.length} total={histLines.length} lines={visible} filename={filename}
+            note={histMeta?.truncated
+              ? ` — the last ${histLines.length} of ${histMeta.total} logged${histMeta.dayCap ? ` (capped at ${histMeta.dayCap} per day)` : ''}`
+              : ''} />
           <LogBox lines={visible} colorize={true} humanTime={true}
             interactive selectMode={selectMode} selected={selected} onToggleSelect={toggle}
             onRowContextMenu={onRowContextMenu} />

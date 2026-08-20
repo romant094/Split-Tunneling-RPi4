@@ -20,14 +20,43 @@ const CIDR_RE = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/
 
 // CIDR_RE only checks digit-group shape (1-3 digits per octet, 1-2 digit prefix);
 // it accepts out-of-range values like 999.999.999.999/99. isValidCidr adds octet
-// (0-255) and prefix (0-32) range checks on top (WR-05).
+// (0-255) and prefix (0-32) range checks on top (WR-05), plus the host-bits check
+// below.
 function isValidCidr(cidr) {
   if (!CIDR_RE.test(cidr)) return false
   const [ip, prefix] = cidr.split('/')
   const octets = ip.split('.').map(Number)
   if (octets.some(o => o < 0 || o > 255)) return false
   const p = Number(prefix)
-  return p >= 0 && p <= 32
+  if (p < 0 || p > 32) return false
+  return networkAddress(cidr) === cidr
+}
+
+// The network address for a CIDR, i.e. the same prefix with host bits zeroed.
+// iproute2 rejects a prefix whose host bits are set ("Invalid prefix for given
+// prefix length"), so `172.217.20.0/16` has to be caught here rather than
+// silently failing inside routing.sh on the RPi, where nobody looks.
+function networkAddress(cidr) {
+  const [ip, prefix] = cidr.split('/')
+  const p = Number(prefix)
+  const octets = ip.split('.').map(Number)
+  const asInt = ((octets[0] << 24) | (octets[1] << 16) | (octets[2] << 8) | octets[3]) >>> 0
+  // p === 0 would make the shift below a no-op (x << 32 === x in JS), so mask 0.
+  const mask = p === 0 ? 0 : (0xffffffff << (32 - p)) >>> 0
+  const net = (asInt & mask) >>> 0
+  return [net >>> 24, (net >>> 16) & 255, (net >>> 8) & 255, net & 255].join('.') + '/' + p
+}
+
+// Message for a CIDR isValidCidr rejected. A bare "invalid CIDR" is unhelpful for
+// 172.217.20.0/16, where the octets and the prefix are individually fine and only
+// their combination is wrong.
+function cidrError(cidr) {
+  if (!CIDR_RE.test(cidr)) return 'Invalid CIDR format (e.g. 1.2.3.0/24)'
+  const [ip, prefix] = cidr.split('/')
+  if (ip.split('.').map(Number).some(o => o < 0 || o > 255)) return 'Octets must be 0-255'
+  const p = Number(prefix)
+  if (p < 0 || p > 32) return 'Prefix length must be 0-32'
+  return `Not a network address — host bits are set. Did you mean ${networkAddress(cidr)}?`
 }
 
 // Registry of each RouteSection's reload() fn, keyed by endpoint (vpn/isp),
@@ -100,7 +129,7 @@ function AddSingleDialog({ open, onClose, onAdd, existingCidrs }) {
 
   async function handleAdd() {
     const c = cidr.trim()
-    if (!isValidCidr(c)) { setErr('Invalid CIDR format (e.g. 1.2.3.0/24)'); return }
+    if (!isValidCidr(c)) { setErr(cidrError(c)); return }
     if (existingCidrs.has(c)) { setErr('This route already exists'); return }
     setErr('')
     const result = await onAdd({ cidr: c, description: desc.trim() })
@@ -196,7 +225,7 @@ function EditDialog({ open, entry, onClose, onSave, existingCidrs }) {
 
   async function handleSave() {
     const c = cidr.trim()
-    if (!isValidCidr(c)) { setErr('Invalid CIDR format'); return }
+    if (!isValidCidr(c)) { setErr(cidrError(c)); return }
     if (c !== entry.cidr && existingCidrs.has(c)) { setErr('A route with this CIDR already exists'); return }
     setErr('')
     const result = await onSave({ old_cidr: entry.cidr, cidr: c, description: desc.trim() })
