@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Download, Plus, X, Filter, EyeOff, Copy, ChevronDown, CalendarIcon, MousePointerClick } from 'lucide-react'
 import { setOnPage, setBgMode as setStreamBgMode, subscribeLines, subscribeMeta, clearLines } from '../logStream'
 import { stageAdd, stageAddMany } from '../routeStaging'
+import { flushAndApply, getApplyImmediately, setApplyImmediately } from '../routeApply'
 import { cn } from '@/lib/utils'
 
 const MAX_FILTERS = 5
@@ -301,20 +302,43 @@ export function LogBox({
 // (single or batch), matching the Routes page's inline-message pattern.
 function useStageActions() {
   const [stageMsg, setStageMsg] = useState('')
-  function announce(msg) {
+  const [stageErr, setStageErr] = useState(false)
+
+  function announce(msg, isError = false) {
     setStageMsg(msg)
-    setTimeout(() => setStageMsg(''), 3000)
+    setStageErr(isError)
+    // Errors linger — a failed apply is worth reading, and it is the one case
+    // where the user needs to know to go and retry on the Routes page.
+    setTimeout(() => setStageMsg(''), isError ? 8000 : 3000)
   }
+
+  // When the "Apply immediately" preference is on, staging is followed straight
+  // away by the same flush-then-apply the Routes page runs. On failure the
+  // entries stay staged, so the Routes page is still a working fallback and the
+  // message says so.
+  async function maybeApply(what) {
+    if (!getApplyImmediately()) {
+      announce(`Staged ${what} (review in Routes)`)
+      return
+    }
+    announce(`Staged ${what} — applying…`)
+    const res = await flushAndApply()
+    if (res.ok) announce(`✓ Applied ${what}`)
+    else announce(`Staged ${what}, but apply failed: ${res.error}`, true)
+  }
+
   function stage(list, cidr, org) {
     stageAdd(list, { cidr, description: org })
-    announce(`Staged ${cidr} → ${list.toUpperCase()} (review in Routes)`)
+    maybeApply(`${cidr} → ${list.toUpperCase()}`)
   }
+
   function stageMany(list, entries) {
     if (!entries.length) return
     stageAddMany(list, entries)
-    announce(`Staged ${entries.length} route${entries.length === 1 ? '' : 's'} → ${list.toUpperCase()} (review in Routes)`)
+    maybeApply(`${entries.length} route${entries.length === 1 ? '' : 's'} → ${list.toUpperCase()}`)
   }
-  return { stageMsg, stage, stageMany }
+
+  return { stageMsg, stageErr, stage, stageMany }
 }
 
 // Multi-select mode: clicking a row toggles selection; state is display-only
@@ -398,10 +422,18 @@ function SelectionBar({ selectMode, onEnter, count, routeCount, onClear, onAddIs
 function AddAllButton({ lines, onStageMany }) {
   const [open, setOpen] = useState(false)
   const [target, setTarget] = useState(null)   // 'isp' | 'vpn' | null
+  // Read once per dialog open rather than on every render, so the checkbox is a
+  // controlled input backed by the persisted preference.
+  const [applyNow, setApplyNow] = useState(getApplyImmediately)
+
+  // Re-read on open: the preference is shared with the right-click and selection
+  // paths, so it can have changed since this component mounted.
+  useEffect(() => { if (target) setApplyNow(getApplyImmediately()) }, [target])
 
   const entries = selectedToEntries(lines)
 
   function confirm() {
+    setApplyImmediately(applyNow)
     onStageMany(target, entries)
     setTarget(null)
   }
@@ -437,8 +469,9 @@ function AddAllButton({ lines, onStageMany }) {
             <DialogDescription>
               {lines.length} visible line{lines.length === 1 ? '' : 's'} → {entries.length} route
               {entries.length === 1 ? '' : 's'}, since destinations in the same /24 collapse into one.
-              These are staged only — review them under Pending changes on the Routes page and click
-              Apply Changes to activate.
+              {applyNow
+                ? ' They will be written and activated right away — routing.sh runs on the RPi.'
+                : ' These are staged only — review them under Pending changes on the Routes page and click Apply Changes to activate.'}
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-56 overflow-y-auto rounded-md border border-border bg-muted/40 p-2 text-xs space-y-0.5">
@@ -449,9 +482,21 @@ function AddAllButton({ lines, onStageMany }) {
               </div>
             ))}
           </div>
+          <label className="flex items-start gap-2 text-sm cursor-pointer select-none">
+            <Checkbox className="mt-0.5" checked={applyNow} onChange={e => setApplyNow(e.target.checked)} />
+            <span>
+              Apply immediately
+              <span className="block text-xs text-muted-foreground mt-0.5">
+                Skip the trip to the Routes page. Remembered for next time, and also applies to
+                right-click and selection adds.
+              </span>
+            </span>
+          </label>
           <DialogFooter>
             <Button variant="outline" onClick={() => setTarget(null)}>Cancel</Button>
-            <Button onClick={confirm}>Add {entries.length} route{entries.length === 1 ? '' : 's'}</Button>
+            <Button onClick={confirm}>
+              {applyNow ? 'Add and apply' : `Add ${entries.length} route${entries.length === 1 ? '' : 's'}`}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -591,7 +636,7 @@ export function LogsLive() {
   const [excludes, setExcludes] = useState([''])
   const [dedupe, setDedupe] = useState(false)
   const [ctxMenu, setCtxMenu] = useState(null)
-  const { stageMsg, stage, stageMany } = useStageActions()
+  const { stageMsg, stageErr, stage, stageMany } = useStageActions()
   const { selectMode, setSelectMode, selected, toggle, clear, exit, selectAll } = useSelection()
 
   useEffect(() => {
@@ -645,7 +690,7 @@ export function LogsLive() {
       <FilterBar filters={filters} onChange={setFilters} />
       <FilterBar filters={excludes} onChange={setExcludes} mode="exclude" />
       <LogsLegend />
-      {stageMsg && <p className="text-xs text-primary">{stageMsg}</p>}
+      {stageMsg && <p className={`text-xs ${stageErr ? 'text-destructive' : 'text-primary'}`}>{stageMsg}</p>}
       <LogBox lines={visible} colorize={true} humanTime={true}
         interactive selectMode={selectMode} selected={selected} onToggleSelect={toggle}
         onRowContextMenu={onRowContextMenu} />
@@ -672,7 +717,7 @@ export function LogsHistory() {
   const [histMsg, setHistMsg] = useState('')
   const [dedupe, setDedupe] = useState(false)
   const [ctxMenu, setCtxMenu] = useState(null)
-  const { stageMsg, stage, stageMany } = useStageActions()
+  const { stageMsg, stageErr, stage, stageMany } = useStageActions()
   const { selectMode, setSelectMode, selected, toggle, exit, selectAll } = useSelection()
 
   function onRowContextMenu(e, line) {
@@ -757,7 +802,7 @@ export function LogsHistory() {
           <FilterBar filters={filters} onChange={setFilters} />
           <FilterBar filters={excludes} onChange={setExcludes} mode="exclude" />
           <LogsLegend />
-          {stageMsg && <p className="text-xs text-primary">{stageMsg}</p>}
+          {stageMsg && <p className={`text-xs ${stageErr ? 'text-destructive' : 'text-primary'}`}>{stageMsg}</p>}
           <p className="text-xs text-muted-foreground">
             {visible.length} / {histLines.length} lines shown
             {histMeta?.truncated && (

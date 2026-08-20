@@ -11,9 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Trash2, Pencil, Plus, List, ArrowUpDown, ArrowUp, ArrowDown, Search, Wand2 } from 'lucide-react'
 import DiffPreview from '../components/DiffPreview'
 import {
-  subscribe as subscribeStaging, getPending, clearPending,
-  stageDescriptions, getPendingDescriptions, clearPendingDescriptions,
+  subscribe as subscribeStaging, stageDescriptions,
+  getPending, getPendingDescriptions,
 } from '../routeStaging'
+import { flushAndApply } from '../routeApply'
 
 const CIDR_RE = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/
 
@@ -703,62 +704,20 @@ export default function RoutesPage() {
   // rather than a permanently dead one.
   const hasPending = routesDirty !== false || stagedCount > 0
 
-  async function flushStagedList(list) {
-    const entries = getPending(list)
-    if (!entries.length) return true
-    const r = await apiFetch(`/api/routes/${list}/bulk`, { method: 'POST', body: JSON.stringify({ entries }) })
-    if (!r.ok) return false
-    clearPending(list)
-    return true
-  }
-
-  async function flushStagedDescriptions(list) {
-    const map = getPendingDescriptions(list)
-    const entries = Object.entries(map)
-    if (!entries.length) return
-    // Sequential: each PUT rewrites the whole route file on the RPi, concurrent
-    // writes would race. A route deleted meanwhile 404s - ignore and continue.
-    for (const [cidr, description] of entries) {
-      try {
-        await apiFetch(`/api/routes/${list}`, {
-          method: 'PUT',
-          body: JSON.stringify({ old_cidr: cidr, cidr, description }),
-        })
-      } catch {
-        // ignore individual failures, continue flushing the rest
-      }
-    }
-    clearPendingDescriptions(list)
-  }
-
   async function applyRoutes() {
     setApplying(true)
     setApplyMsg('Applying…')
     try {
-      // Bulk-write-then-apply: flush any staged adds (from Routes edits or Logs
-      // batch-add) into the route files first, then activate via config/apply.
-      // Only clear staged entries once the bulk write actually succeeded, so a
-      // failed write never silently discards pending routes (CR-02).
-      const okVpn = await flushStagedList('vpn')
-      const okIsp = await flushStagedList('isp')
-      if (!okVpn || !okIsp) {
-        setApplyMsg('Error: failed to save staged routes — not applied, changes kept pending')
-        return
-      }
-      await flushStagedDescriptions('vpn')
-      await flushStagedDescriptions('isp')
-      const r = await apiFetch('/api/config/apply', { method: 'POST' })
-      const d = await r.json()
-      setApplyMsg(r.ok ? '✓ Applied' : `Error: ${d.error}`)
+      // Bulk-write-then-apply, shared with the Logs page's "Apply immediately"
+      // path — see routeApply.js for the ordering and failure rules.
+      const res = await flushAndApply()
+      setApplyMsg(res.ok ? '✓ Applied' : `Error: ${res.error}`)
       // The apply response echoes the recomputed flag, so the button settles
       // immediately instead of staying enabled until the next poll.
-      if (r.ok) setRoutesDirty(d.routes_dirty)
+      if (res.ok) setRoutesDirty(res.routesDirty)
       else refreshDirty()
       if (_reloaders.vpn) _reloaders.vpn()
       if (_reloaders.isp) _reloaders.isp()
-    } catch {
-      setApplyMsg('Error: apply failed')
-      refreshDirty()
     } finally {
       setApplying(false)
     }
