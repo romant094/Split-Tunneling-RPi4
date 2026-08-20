@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Quick task 260820-lo0 complete. OPEN: routing.sh Stage 5c still rejects 1 VPN-force route on the device (2.21.65.19 resolves via ISP) — needs the iproute2 ERROR line from install.log
-last_updated: "2026-08-20T11:17:13.739Z"
+stopped_at: 2026-08-20 web-admin fix batch archived — see .planning/quick/260820-web-admin-fix-batch.md for shipped work and 6 open items. Project not finished; no phase in progress.
+last_updated: "2026-08-20T14:30:00.765Z"
 progress:
   total_phases: 16
   completed_phases: 13
@@ -165,6 +165,9 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 - vite + react + react-dom + react-router-dom (npm, dev only — dist committed to repo)
 
 ## Quick Tasks Completed
+
+Batch roll-up for 2026-08-20 (four tasks + the deploy fix, with open items):
+[260820-web-admin-fix-batch.md](./quick/260820-web-admin-fix-batch.md)
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
