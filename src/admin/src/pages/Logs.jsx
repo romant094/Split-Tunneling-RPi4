@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Download, Plus, X, Filter, CalendarIcon, MousePointerClick } from 'lucide-react'
+import { Download, Plus, X, Filter, EyeOff, Copy, CalendarIcon, MousePointerClick } from 'lucide-react'
 import { setOnPage, setBgMode as setStreamBgMode, subscribeLines, subscribeMeta, clearLines } from '../logStream'
 import { stageAdd, stageAddMany } from '../routeStaging'
 import { cn } from '@/lib/utils'
@@ -24,10 +24,24 @@ const SUBTABS = [
 
 // ── Shared utilities ────────────────────────────────────────────────────────
 
+// Include terms are ANDed: a line must match every one of them to survive.
 function applyFilters(lines, filters) {
   const active = filters.filter(f => f.trim())
   if (!active.length) return lines
   return lines.filter(line => active.every(f => line.toLowerCase().includes(f.toLowerCase())))
+}
+
+// Exclude terms are ORed: matching any one of them hides the line. OR is the
+// useful default here — each field names one thing to get rid of, and requiring
+// all of them to match would make a second term widen the view instead of
+// narrowing it.
+function applyExcludes(lines, excludes) {
+  const active = excludes.filter(f => f.trim()).map(f => f.toLowerCase())
+  if (!active.length) return lines
+  return lines.filter(line => {
+    const lower = line.toLowerCase()
+    return !active.some(f => lower.includes(f))
+  })
 }
 
 function downloadLines(lines, filename) {
@@ -298,18 +312,23 @@ function LogsLegend() {
   )
 }
 
-function FilterBar({ filters, onChange }) {
+// One component for both filter rows. mode 'include' keeps lines that match all
+// terms; mode 'exclude' hides lines matching any term.
+function FilterBar({ filters, onChange, mode = 'include' }) {
+  const exclude = mode === 'exclude'
+  const Icon = exclude ? EyeOff : Filter
   function set(i, val) { const n = [...filters]; n[i] = val; onChange(n) }
   function add() { if (filters.length < MAX_FILTERS) onChange([...filters, '']) }
   function remove(i) { onChange(filters.filter((_, j) => j !== i)) }
   function clearAll() { onChange(['']) }
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <Filter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0"
+        title={exclude ? 'Hide lines matching any of these' : 'Show only lines matching all of these'} />
       {filters.map((f, i) => (
         <div key={i} className="flex items-center gap-1">
           <Input value={f} onChange={e => set(i, e.target.value)}
-            placeholder={`Filter ${i + 1}…`} className="h-7 text-xs w-36" />
+            placeholder={exclude ? `Hide ${i + 1}…` : `Filter ${i + 1}…`} className="h-7 text-xs w-36" />
           {filters.length > 1 && (
             <button onClick={() => remove(i)} className="text-muted-foreground hover:text-foreground cursor-pointer">
               <X className="h-3 w-3" />
@@ -412,6 +431,7 @@ export function LogsLive() {
   const [liveLines, setLiveLines] = useState([])
   const [liveMeta, setLiveMeta] = useState({ connected: false, bgMode: false })
   const [filters, setFilters] = useState([''])
+  const [excludes, setExcludes] = useState([''])
   const [dedupe, setDedupe] = useState(false)
   const [ctxMenu, setCtxMenu] = useState(null)
   const { stageMsg, stage, stageMany } = useStageActions()
@@ -424,7 +444,9 @@ export function LogsLive() {
     return () => { setOnPage(false); u1(); u2() }
   }, [])
 
-  const filtered = applyFilters(liveLines, filters)
+  // include (AND) -> exclude (OR) -> dedupe, so a hidden line is never the one
+  // that survives dedupe and suppresses its visible duplicates.
+  const filtered = applyExcludes(applyFilters(liveLines, filters), excludes)
   const visible = dedupe ? dedupeLines(filtered) : filtered
   const filename = `splitgate-live-${format(new Date(), 'yyyy-MM-dd')}.txt`
 
@@ -462,6 +484,7 @@ export function LogsLive() {
         </Button>
       </div>
       <FilterBar filters={filters} onChange={setFilters} />
+      <FilterBar filters={excludes} onChange={setExcludes} mode="exclude" />
       <LogsLegend />
       {stageMsg && <p className="text-xs text-primary">{stageMsg}</p>}
       <LogBox lines={visible} colorize={true} humanTime={true}
@@ -477,6 +500,7 @@ export function LogsLive() {
 
 export function LogsHistory() {
   const [filters, setFilters] = useState([''])
+  const [excludes, setExcludes] = useState([''])
   const [histFromDate, setHistFromDate] = useState(() => { const d = new Date(); d.setHours(0,0,0,0); return d })
   const [histFromTime, setHistFromTime] = useState('00:00')
   const [histToDate, setHistToDate] = useState(null)
@@ -513,7 +537,7 @@ export function LogsHistory() {
     setHistLoading(false)
   }
 
-  const filtered = applyFilters(histLines, filters)
+  const filtered = applyExcludes(applyFilters(histLines, filters), excludes)
   const visible = dedupe ? dedupeLines(filtered) : filtered
   const filename = histFromDate
     ? `splitgate-hist-${format(histFromDate, 'yyyy-MM-dd')}${histToDate ? `-${format(histToDate, 'yyyy-MM-dd')}` : ''}.txt`
@@ -562,6 +586,7 @@ export function LogsHistory() {
       {histLines.length > 0 && (
         <>
           <FilterBar filters={filters} onChange={setFilters} />
+          <FilterBar filters={excludes} onChange={setExcludes} mode="exclude" />
           <LogsLegend />
           {stageMsg && <p className="text-xs text-primary">{stageMsg}</p>}
           <p className="text-xs text-muted-foreground">{visible.length} / {histLines.length} lines shown</p>
