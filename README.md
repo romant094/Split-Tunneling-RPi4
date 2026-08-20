@@ -104,10 +104,18 @@ All three files are gitignored. Full workflow: [docs/REFERENCE.md](docs/REFERENC
 ### 4. Run deploy
 
 ```bash
-bash src/deploy.sh            # deploy all files + activate routing
-bash src/deploy.sh --no-run   # deploy files only (use before tunnel is up)
-bash src/deploy-routes.sh     # fast push of custom-route files only (after editing isp-routes-custom.txt or vpn-routes-custom.txt)
+npm run deploy                       # build admin UI, deploy all files + activate routing
+npm run deploy:no-run                # deploy files only (use before tunnel is up)
+npm run deploy:force-routes          # ...and replace the device's custom-route files with src/configs/
+npm run deploy-routes                # fast push of custom-route files only
+npm run deploy-routes:keep-remote    # only re-apply the device's existing route files
+npm run deploy:admin                 # build + deploy the admin UI and backend, restart the service
 ```
+
+Equivalent direct invocations: `bash src/deploy.sh [--no-run] [--force-routes]`,
+`bash src/deploy-routes.sh [--keep-remote]`.
+
+**Custom routes are not overwritten by default.** Routes added through the web admin exist only on the RPi, and a full deploy used to replace them with whatever was in `src/configs/`, silently. `deploy.sh` now leaves an existing device file alone and says so; pass `--force-routes` to replace it, which first takes a timestamped `.bak` on the device. `deploy-routes.sh` still pushes by design — that is its whole purpose — but it also backs up first and prints the route counts before and after, warning when the local file has fewer routes than the device.
 
 **Non-destructive redeploy:** `deploy.sh` no longer overwrites an already-present `/etc/splitgate/vpn-gateway.env` or `/etc/amnezia/amneziawg/awg0.conf` on the RPi — it skips the overwrite with a warning if the remote file already exists. Edit these files going forward via the admin **Settings page**, or delete the remote file first to force a fresh deploy from the repo template.
 

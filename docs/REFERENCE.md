@@ -476,6 +476,7 @@ Sources `.env` and `.env.secrets`; validates keys before any remote operation.
 | Flag | Description |
 |------|-------------|
 | `--no-run` | Deploy all files but skip `routing.sh` activation. Use for first-time deploys before the tunnel is up, or when testing config changes without activating routes. |
+| `--force-routes` | Replace the device's `isp-routes-custom.txt` / `vpn-routes-custom.txt` with the `src/configs/` copies. Without it, an existing remote file is **preserved** — routes added through the web admin live only on the device, and a full deploy used to wipe them silently. A forced overwrite first copies the remote file to `<path>.bak-YYYYmmdd-HHMMSS` on the RPi. |
 
 ```bash
 bash src/deploy.sh              # full deploy + activate routing
@@ -490,6 +491,18 @@ ssh pi4 "sudo /etc/splitgate/routing.sh"   # activate after --no-run deploy
 **Synopsis:** `bash src/deploy-routes.sh`
 
 Fast custom-routes-only deploy. Runs from your Mac. 3 stages: SSH preflight, conditional SCP of each custom-route file, then `routing.sh --no-update` on the RPi.
+
+Unlike `deploy.sh` this script overwrites the device's route files by default — pushing them is its
+entire purpose. It does back up the remote copy to `<path>.bak-YYYYmmdd-HHMMSS` first and print the
+route counts before and after, warning explicitly when the local file has fewer routes than the
+device, so a replacement that drops web-admin-added entries shows up in the output rather than being
+found days later. `--keep-remote` skips the push and only re-applies what is already there.
+
+**Two sources of truth.** `src/configs/*.txt` and the device's `/etc/splitgate/*.txt` diverge as soon
+as routes are added through the web admin, and nothing reconciles them. Keep one habit: either manage
+routes in the repo and push, or manage them in the admin and use `--keep-remote` / plain `deploy.sh`.
+`Download Backup` on the Routes page (or `GET /api/routes/backup`) exports the device's current state
+in a format `Add List` can re-import.
 
 **When to use:** After editing `src/configs/isp-routes-custom.txt` or `src/configs/vpn-routes-custom.txt` for routine CIDR changes. Skips AmneziaWG install, key validation, and systemd setup — takes seconds instead of the full 30-stage deploy.
 

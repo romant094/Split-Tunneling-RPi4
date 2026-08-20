@@ -11,7 +11,11 @@
 #   Phase 5 D-05: conditional custom-route deploy — skip file if absent, skip stage cleanly
 #
 # Usage:
-#   bash src/deploy-routes.sh
+#   bash src/deploy-routes.sh [--keep-remote]
+#
+#   --keep-remote  Leave the device's route files untouched and only re-apply them.
+#                  Use when routes are being managed from the web admin and the
+#                  local src/configs/ copies are stale.
 #
 # Requires:
 #   - ~/.ssh/config has a 'pi4' host alias with SSH key auth
@@ -33,6 +37,15 @@ VPN_FORCE_REMOTE="/etc/splitgate/vpn-routes-custom.txt"
 VPN_FORCE_TMP="/tmp/vpn-routes-custom.tmp"
 
 ROUTING_SH_REMOTE="/etc/splitgate/routing.sh"
+
+# ─── Argument parsing ────────────────────────────────────────────────────────
+KEEP_REMOTE=false
+for arg in "$@"; do
+  case "$arg" in
+    --keep-remote) KEEP_REMOTE=true ;;
+    *) ;;
+  esac
+done
 
 # ─── Preflight: source .env ──────────────────────────────────────────────────
 if [[ ! -f ../.env ]]; then
@@ -71,25 +84,55 @@ fi
 
 echo "       SSH connection to ${SSH_HOST} successful."
 
+# ─── Route-file push ─────────────────────────────────────────────────────────
+# Pushing the local route files IS this script's purpose, so unlike deploy.sh it
+# overwrites by default. But routes are also managed from the web admin and live
+# only on the device, so every overwrite is preceded by a timestamped .bak and the
+# route counts are printed before and after — a replacement that loses entries is
+# then visible in the output instead of being discovered days later.
+# --keep-remote skips the push entirely and only re-applies what is already there.
+push_route_file() {
+    local local_path="$1" remote_path="$2" tmp_path="$3" label="$4"
+
+    if [[ ! -f "${local_path}" ]]; then
+        echo "       ${local_path} not found — skipping ${label} deploy."
+        return 0
+    fi
+
+    local local_count remote_count
+    local_count=$(grep -c '^[^#]' "${local_path}" || true)
+
+    if ssh -o BatchMode=yes "${SSH_HOST}" "test -f ${remote_path}"; then
+        remote_count=$(ssh -o BatchMode=yes "${SSH_HOST}" "grep -c '^[^#]' ${remote_path} || true")
+        if [[ "${KEEP_REMOTE}" == true ]]; then
+            echo "       ${remote_path} kept as-is (${remote_count} route line(s)) — --keep-remote."
+            return 0
+        fi
+        local stamp
+        stamp=$(date '+%Y%m%d-%H%M%S')
+        ssh -o BatchMode=yes "${SSH_HOST}" "sudo cp ${remote_path} ${remote_path}.bak-${stamp}"
+        echo "       Backed up remote copy to ${remote_path}.bak-${stamp}"
+        echo "       Replacing ${remote_count} remote route line(s) with ${local_count} local one(s)."
+        if (( local_count < remote_count )); then
+            echo "       NOTE: the local file has FEWER routes than the device — entries added via the"
+            echo "             web admin are about to be dropped. Restore from the .bak above if unintended."
+        fi
+    else
+        echo "       No remote copy yet — deploying ${local_count} route line(s)."
+    fi
+
+    scp -o BatchMode=yes "${local_path}" "${SSH_HOST}:${tmp_path}"
+    ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${tmp_path} ${remote_path} && sudo chmod 644 ${remote_path} && sudo chown root:root ${remote_path}"
+    echo "       ${label} deployed (mode 644, root:root)."
+}
+
 # ─── Stage 1/3: Deploy isp-routes-custom.txt (D-05) ─────────────────────────
 echo "[2/3] Deploying isp-routes-custom.txt to ${SSH_HOST} (if present)..."
-if [[ -f "${ISP_CUSTOM_LOCAL}" ]]; then
-    scp -o BatchMode=yes "${ISP_CUSTOM_LOCAL}" "${SSH_HOST}:${ISP_CUSTOM_TMP}"
-    ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${ISP_CUSTOM_TMP} ${ISP_CUSTOM_REMOTE} && sudo chmod 644 ${ISP_CUSTOM_REMOTE} && sudo chown root:root ${ISP_CUSTOM_REMOTE}"
-    echo "       isp-routes-custom.txt deployed (mode 644, root:root)."
-else
-    echo "       ${ISP_CUSTOM_LOCAL} not found — skipping ISP-custom deploy."
-fi
+push_route_file "${ISP_CUSTOM_LOCAL}" "${ISP_CUSTOM_REMOTE}" "${ISP_CUSTOM_TMP}" "isp-routes-custom.txt"
 
 # ─── Stage 2/3: Deploy vpn-routes-custom.txt (D-05) ─────────────────────────
 echo "[2b/3] Deploying vpn-routes-custom.txt to ${SSH_HOST} (if present)..."
-if [[ -f "${VPN_FORCE_LOCAL}" ]]; then
-    scp -o BatchMode=yes "${VPN_FORCE_LOCAL}" "${SSH_HOST}:${VPN_FORCE_TMP}"
-    ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${VPN_FORCE_TMP} ${VPN_FORCE_REMOTE} && sudo chmod 644 ${VPN_FORCE_REMOTE} && sudo chown root:root ${VPN_FORCE_REMOTE}"
-    echo "       vpn-routes-custom.txt deployed (mode 644, root:root)."
-else
-    echo "       ${VPN_FORCE_LOCAL} not found — skipping VPN-force deploy."
-fi
+push_route_file "${VPN_FORCE_LOCAL}" "${VPN_FORCE_REMOTE}" "${VPN_FORCE_TMP}" "vpn-routes-custom.txt"
 
 # ─── Stage 3/3: Activate routing.sh --no-update ──────────────────────────────
 echo "[3/3] Activating routing.sh --no-update on ${SSH_HOST}..."

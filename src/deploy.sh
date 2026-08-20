@@ -15,7 +15,7 @@
 # Usage:
 #   1. Copy .env.secrets.example to .env.secrets and fill in your 44-char base64 keys
 #   2. Ensure ~/.ssh/config has a 'pi4' host alias (SSH key auth, user ar)
-#   3. Run: bash src/deploy.sh [--no-run]
+#   3. Run: bash src/deploy.sh [--no-run] [--force-routes]
 #
 # This script deploys:
 #   - AmneziaWG (via scripts/install-awg.sh over SSH)
@@ -102,12 +102,55 @@ TOTAL_STAGES=30
 
 # ─── Argument Parsing (D-12) ─────────────────────────────────────────────────
 RUN_ROUTING=true
+# Custom-route files are managed from the web admin as well as from this repo, so
+# a full deploy must not silently replace the device's copy with whatever happens
+# to be in src/configs/. Stages 22 and 22b preserve an existing remote file
+# unless --force-routes is passed — the same principle as the non-destructive
+# redeploy already applied to vpn-gateway.env and awg0.conf.
+FORCE_ROUTES=false
 for arg in "$@"; do
   case "$arg" in
     --no-run) RUN_ROUTING=false ;;
+    --force-routes) FORCE_ROUTES=true ;;
     *) ;;
   esac
 done
+
+# ─── Custom-route file deploy (preserve-by-default) ──────────────────────────
+# Usage: deploy_route_file <local> <remote> <tmp> <label>
+#
+# Skips when the remote file already exists and --force-routes was not passed,
+# because routes added through the web admin exist only on the device and a full
+# deploy used to wipe them without a word. When it does overwrite, the remote file
+# is first copied to a timestamped .bak on the device so the replacement is
+# recoverable without re-importing a backup by hand.
+deploy_route_file() {
+    local local_path="$1" remote_path="$2" tmp_path="$3" label="$4"
+
+    if [[ ! -f "${local_path}" ]]; then
+        echo "       ${local_path} not found in repo — skipping ${label} deploy (D-05)."
+        return 0
+    fi
+
+    if ssh -o BatchMode=yes "${SSH_HOST}" "test -f ${remote_path}"; then
+        if [[ "${FORCE_ROUTES}" != true ]]; then
+            local remote_count
+            remote_count=$(ssh -o BatchMode=yes "${SSH_HOST}" "grep -c '^[^#]' ${remote_path} || true")
+            echo "       ${remote_path} already exists (${remote_count} route line(s)) — PRESERVED."
+            echo "       Routes added via the web admin live only on the device; this deploy left them alone."
+            echo "       Pass --force-routes to replace it with ${local_path}."
+            return 0
+        fi
+        local stamp
+        stamp=$(date '+%Y%m%d-%H%M%S')
+        ssh -o BatchMode=yes "${SSH_HOST}" "sudo cp ${remote_path} ${remote_path}.bak-${stamp}"
+        echo "       Existing ${remote_path} backed up to ${remote_path}.bak-${stamp}"
+    fi
+
+    scp -o BatchMode=yes "${local_path}" "${SSH_HOST}:${tmp_path}"
+    ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${tmp_path} ${remote_path} && sudo chmod 644 ${remote_path} && sudo chown root:root ${remote_path}"
+    echo "       ${label} deployed (mode 644, root:root)."
+}
 
 # ─── Key Validation Function (D-10, RESEARCH.md Pattern 2) ─────────────────
 # Usage: validate_key <value> <name>
@@ -433,23 +476,11 @@ echo "       watch-routes.py deployed (chmod +x, root:root)."
 
 # ─── Stage 22: Deploy isp-routes-custom.txt to RPi (D-05) ───────────────────
 echo "[22/${TOTAL_STAGES}] Deploying isp-routes-custom.txt to ${SSH_HOST} (if present)..."
-if [[ -f "${ISP_CUSTOM_LOCAL}" ]]; then
-    scp -o BatchMode=yes "${ISP_CUSTOM_LOCAL}" "${SSH_HOST}:${ISP_CUSTOM_TMP}"
-    ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${ISP_CUSTOM_TMP} ${ISP_CUSTOM_REMOTE} && sudo chmod 644 ${ISP_CUSTOM_REMOTE} && sudo chown root:root ${ISP_CUSTOM_REMOTE}"
-    echo "       isp-routes-custom.txt deployed (mode 644, root:root)."
-else
-    echo "       ${ISP_CUSTOM_LOCAL} not found in repo — skipping ISP-custom file deploy (D-05)."
-fi
+deploy_route_file "${ISP_CUSTOM_LOCAL}" "${ISP_CUSTOM_REMOTE}" "${ISP_CUSTOM_TMP}" "isp-routes-custom.txt"
 
 # ─── Stage 22b: Deploy vpn-routes-custom.txt to RPi (D-05) ──────────────────
 echo "[22b/${TOTAL_STAGES}] Deploying vpn-routes-custom.txt to ${SSH_HOST} (if present)..."
-if [[ -f "${VPN_FORCE_LOCAL}" ]]; then
-    scp -o BatchMode=yes "${VPN_FORCE_LOCAL}" "${SSH_HOST}:${VPN_FORCE_TMP}"
-    ssh -o BatchMode=yes "${SSH_HOST}" "sudo mv ${VPN_FORCE_TMP} ${VPN_FORCE_REMOTE} && sudo chmod 644 ${VPN_FORCE_REMOTE} && sudo chown root:root ${VPN_FORCE_REMOTE}"
-    echo "       vpn-routes-custom.txt deployed (mode 644, root:root)."
-else
-    echo "       ${VPN_FORCE_LOCAL} not found in repo — skipping VPN-force file deploy (D-05)."
-fi
+deploy_route_file "${VPN_FORCE_LOCAL}" "${VPN_FORCE_REMOTE}" "${VPN_FORCE_TMP}" "vpn-routes-custom.txt"
 
 # ─── Stage 22c: Deploy ru-list-exclude.txt to RPi (D-07, D-08) ──────────────
 echo "[22c/${TOTAL_STAGES}] Deploying ru-list-exclude.txt to ${SSH_HOST} (if present)..."
