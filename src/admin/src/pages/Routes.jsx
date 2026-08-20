@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
@@ -229,19 +230,34 @@ function EditDialog({ open, entry, onClose, onSave, existingCidrs }) {
   )
 }
 
-function DeleteConfirmDialog({ open, cidr, onClose, onConfirm }) {
+// Handles both the single row-action delete and the batch delete: `cidrs` is a
+// list either way, so the confirmation always names exactly what will go.
+function DeleteConfirmDialog({ open, cidrs, busy, onClose, onConfirm }) {
+  const list = cidrs || []
+  const single = list.length === 1
   return (
-    <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
+    <Dialog open={open} onOpenChange={v => { if (!v && !busy) onClose() }}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Remove Route</DialogTitle>
+          <DialogTitle>{single ? 'Remove Route' : `Remove ${list.length} Routes`}</DialogTitle>
           <DialogDescription>
-            Remove <code className="font-mono text-foreground">{cidr}</code>? This cannot be undone without re-adding it.
+            {single ? (
+              <>Remove <code className="font-mono text-foreground">{list[0]}</code>? This cannot be undone without re-adding it.</>
+            ) : (
+              <>Remove these {list.length} routes? This cannot be undone without re-adding them.</>
+            )}
           </DialogDescription>
         </DialogHeader>
+        {!single && (
+          <div className="max-h-40 overflow-y-auto rounded-md border border-border bg-muted/40 p-2 font-mono text-xs space-y-0.5">
+            {list.map(c => <div key={c}>{c}</div>)}
+          </div>
+        )}
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button variant="destructive" onClick={onConfirm}>Remove</Button>
+          <Button variant="outline" disabled={busy} onClick={onClose}>Cancel</Button>
+          <Button variant="destructive" disabled={busy} onClick={onConfirm}>
+            {busy ? 'Removing…' : 'Remove'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -264,7 +280,11 @@ function RouteSection({ endpoint }) {
   const [addSingle, setAddSingle] = useState(false)
   const [addBulk, setAddBulk] = useState(false)
   const [editEntry, setEditEntry] = useState(null)
-  const [deleteEntry, setDeleteEntry] = useState(null)
+  // Pending delete as a CIDR list — one entry for the row action, many for a
+  // batch. null means the dialog is closed.
+  const [pendingDelete, setPendingDelete] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const [selected, setSelected] = useState(() => new Set())
   const [msg, setMsg] = useState('')
   const [msgTone, setMsgTone] = useState('error')
   const [staged, setStaged] = useState(() => getPending(endpoint))
@@ -328,6 +348,34 @@ function RouteSection({ endpoint }) {
     return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
   })
 
+  // Drop selected CIDRs that are no longer visible — filtered out, or deleted
+  // server-side. A row the user cannot see must never be swept up by Delete N.
+  const visibleCidrs = sorted.map(r => r.cidr)
+  useEffect(() => {
+    setSelected(prev => {
+      if (prev.size === 0) return prev
+      const visible = new Set(visibleCidrs)
+      const next = new Set([...prev].filter(c => visible.has(c)))
+      return next.size === prev.size ? prev : next
+    })
+    // visibleCidrs is derived; compare by content so this does not fire on every render
+  }, [visibleCidrs.join(',')]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const allVisibleSelected = visibleCidrs.length > 0 && visibleCidrs.every(c => selected.has(c))
+  const someVisibleSelected = selected.size > 0 && !allVisibleSelected
+
+  function toggleRow(cidr) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(cidr)) next.delete(cidr); else next.add(cidr)
+      return next
+    })
+  }
+
+  function toggleAllVisible() {
+    setSelected(allVisibleSelected ? new Set() : new Set(visibleCidrs))
+  }
+
   async function handleAdd(entry) {
     setMsg(''); setMsgTone('error')
     const r = await apiFetch(`/api/routes/${endpoint}`, { method: 'POST', body: JSON.stringify(entry) })
@@ -382,11 +430,36 @@ function RouteSection({ endpoint }) {
     }
   }
 
+  // Sequential, never concurrent: every DELETE rewrites the whole route file on
+  // the RPi, so parallel requests would read-modify-write over each other and
+  // silently lose entries (same constraint as flushStagedDescriptions).
   async function handleDelete() {
-    setMsg('')
-    const r = await apiFetch(`/api/routes/${endpoint}`, { method: 'DELETE', body: JSON.stringify({ cidr: deleteEntry.cidr }) })
-    if (!r.ok) { const d = await r.json(); setMsg(d.error) }
-    setDeleteEntry(null)
+    const targets = pendingDelete || []
+    if (!targets.length) { setPendingDelete(null); return }
+    setMsg(''); setMsgTone('error')
+    setDeleting(true)
+    let removed = 0
+    let firstError = ''
+    for (const cidr of targets) {
+      try {
+        const r = await apiFetch(`/api/routes/${endpoint}`, { method: 'DELETE', body: JSON.stringify({ cidr }) })
+        if (r.ok) { removed += 1; continue }
+        const d = await r.json().catch(() => ({}))
+        if (!firstError) firstError = d.error || `Failed to remove ${cidr}`
+      } catch {
+        if (!firstError) firstError = `Failed to remove ${cidr} (connection error)`
+      }
+    }
+    setDeleting(false)
+    setPendingDelete(null)
+    setSelected(new Set())
+    if (removed < targets.length) {
+      setMsg(`Removed ${removed} of ${targets.length}. ${firstError}`)
+      setMsgTone('error')
+    } else if (targets.length > 1) {
+      setMsg(`Removed ${removed} route${removed === 1 ? '' : 's'}.`)
+      setMsgTone('info')
+    }
     load()
   }
 
@@ -417,6 +490,18 @@ function RouteSection({ endpoint }) {
           <DiffPreview additions={additions} removals={removals} modifications={modifications} />
         </div>
       )}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-2 flex-wrap rounded-md border border-border bg-muted/40 px-3 py-2">
+          <span className="text-xs text-muted-foreground">{selected.size} selected</span>
+          <Button size="sm" variant="destructive" className="h-7"
+            onClick={() => setPendingDelete([...selected])}>
+            <Trash2 className="h-3.5 w-3.5 mr-1" />Delete {selected.size}
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelected(new Set())}>
+            Clear
+          </Button>
+        </div>
+      )}
       {msg && <p className={`text-sm ${msgTone === 'error' ? 'text-destructive' : 'text-muted-foreground'}`}>{msg}</p>}
       {loading ? (
         <p className="text-muted-foreground text-sm py-4">Loading…</p>
@@ -429,6 +514,14 @@ function RouteSection({ endpoint }) {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8">
+                  <Checkbox
+                    checked={allVisibleSelected}
+                    indeterminate={someVisibleSelected}
+                    onChange={toggleAllVisible}
+                    aria-label={filter ? 'Select all matching routes' : 'Select all routes'}
+                    title={filter ? `Select all ${visibleCidrs.length} matching routes` : 'Select all routes'} />
+                </TableHead>
                 <TableHead>
                   <button className="flex items-center text-xs font-medium uppercase tracking-wide hover:text-foreground"
                     onClick={() => toggleSort('cidr')}>
@@ -446,7 +539,11 @@ function RouteSection({ endpoint }) {
             </TableHeader>
             <TableBody>
               {sorted.map(r => (
-                <TableRow key={r.cidr}>
+                <TableRow key={r.cidr} className={selected.has(r.cidr) ? 'bg-accent/40' : undefined}>
+                  <TableCell className="w-8">
+                    <Checkbox checked={selected.has(r.cidr)} onChange={() => toggleRow(r.cidr)}
+                      aria-label={`Select ${r.cidr}`} />
+                  </TableCell>
                   <TableCell className="font-mono text-sm w-40">{r.cidr}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{r.description || '—'}</TableCell>
                   <TableCell>
@@ -456,7 +553,7 @@ function RouteSection({ endpoint }) {
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
                       <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        onClick={() => setDeleteEntry(r)}>
+                        onClick={() => setPendingDelete([r.cidr])}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -472,7 +569,8 @@ function RouteSection({ endpoint }) {
       <AddSingleDialog open={addSingle} onClose={() => setAddSingle(false)} onAdd={handleAdd} existingCidrs={existingCidrs} />
       <AddBulkDialog open={addBulk} onClose={() => setAddBulk(false)} onBulkAdd={handleBulkAdd} />
       <EditDialog open={!!editEntry} entry={editEntry} onClose={() => setEditEntry(null)} onSave={handleEdit} existingCidrs={existingCidrs} />
-      <DeleteConfirmDialog open={!!deleteEntry} cidr={deleteEntry?.cidr} onClose={() => setDeleteEntry(null)} onConfirm={handleDelete} />
+      <DeleteConfirmDialog open={!!pendingDelete} cidrs={pendingDelete} busy={deleting}
+        onClose={() => setPendingDelete(null)} onConfirm={handleDelete} />
     </div>
   )
 }
