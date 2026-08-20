@@ -44,6 +44,34 @@ function applyExcludes(lines, excludes) {
   })
 }
 
+// Copies the same raw text Download writes — not the formatTs display form — so a
+// pasted line keeps its ISO timestamp and stays greppable.
+function CopyLinesButton({ lines, className }) {
+  const [msg, setMsg] = useState('')
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'))
+      setMsg(`Copied ${lines.length} line${lines.length === 1 ? '' : 's'}`)
+    } catch {
+      // The Clipboard API is unavailable on insecure origins — say so rather
+      // than silently doing nothing.
+      setMsg('Clipboard unavailable')
+    }
+    setTimeout(() => setMsg(''), 2500)
+  }
+
+  return (
+    <>
+      <Button size="sm" variant="ghost" className={className} onClick={copy} disabled={!lines.length}
+        title="Copy the filtered lines as raw text">
+        <Copy className="h-3.5 w-3.5 mr-1" />Copy
+      </Button>
+      {msg && <span className="text-xs text-muted-foreground">{msg}</span>}
+    </>
+  )
+}
+
 function downloadLines(lines, filename) {
   const blob = new Blob([lines.join('\n')], { type: 'text/plain' })
   const url = URL.createObjectURL(blob)
@@ -479,6 +507,7 @@ export function LogsLive() {
           onAddIsp={() => batchStage('isp')} onAddVpn={() => batchStage('vpn')}
           total={visible.length} onToggleAll={() => selectAll(visible)} />
         <span className="text-muted-foreground text-xs ml-auto">{visible.length} / {liveLines.length} lines</span>
+        <CopyLinesButton lines={visible} className="h-8" />
         <Button size="sm" variant="ghost" className="h-8" onClick={() => downloadLines(visible, filename)}>
           <Download className="h-3.5 w-3.5 mr-1" />Download
         </Button>
@@ -577,10 +606,13 @@ export function LogsHistory() {
         )}
         {histMsg && <span className="text-xs text-muted-foreground self-end pb-1">{histMsg}</span>}
         {histLines.length > 0 && (
-          <Button size="sm" variant="ghost" className="h-8 self-end ml-auto"
-            onClick={() => downloadLines(visible, filename)}>
-            <Download className="h-3.5 w-3.5 mr-1" />Download
-          </Button>
+          <div className="flex items-center gap-2 self-end ml-auto">
+            <CopyLinesButton lines={visible} className="h-8" />
+            <Button size="sm" variant="ghost" className="h-8"
+              onClick={() => downloadLines(visible, filename)}>
+              <Download className="h-3.5 w-3.5 mr-1" />Download
+            </Button>
+          </div>
         )}
       </div>
       {histLines.length > 0 && (
