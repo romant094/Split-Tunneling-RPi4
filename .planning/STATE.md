@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Quick tasks 260820-juc/k3a/kcg complete — 9-item web-admin bug/UX batch; NOT yet deployed to the RPi, and local commits are unpushed (SSH key missing)
+stopped_at: Quick task 260820-lo0 complete. OPEN: routing.sh Stage 5c still rejects 1 VPN-force route on the device (2.21.65.19 resolves via ISP) — needs the iproute2 ERROR line from install.log
 last_updated: "2026-08-20T11:17:13.739Z"
 progress:
   total_phases: 16
@@ -104,6 +104,10 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 - Phase 13 D-10: splitgate-watch.service created (ExecStart=watch-routes.py --daemon, Restart=on-failure, StandardError→watch-error.log); TOTAL_STAGES=28; Stage 28 deploys + enables; vpn-rollback.sh Step 1a stops/disables service; logrotate postrotate cleans watch-*.log >14d
 - Quick 260820-juc: route files are accepted in BOTH formats — leading-comment (repo `src/configs/*.txt`) and inline `cidr # desc` (written by the web admin). routing.sh `normalize_route_line()` is the single place that reconciles them; `add_route()` logs iproute2 rejections to install.log instead of swallowing them, with per-stage FAILED counters in the Stage 9 summary
 - Quick 260820-juc: `/etc/splitgate/.last-apply` is stamped by routing.sh Stage 8b (not by the admin backend) so every apply path counts — /api/config/apply, update-vpn-routes from cron, and boot-time vpn-routing.service. `splitgate-admin.py _routes_dirty()` compares custom-route-file mtimes against it; missing stamp = dirty
+- Quick 260820-lo0: routeApply.js owns flush-then-apply for BOTH the Routes page Apply button and the Logs page "Apply immediately" — extracted rather than duplicated because the ordering rules (bulk-write first, clear staging only after success per CR-02, then /api/config/apply) are easy to get subtly wrong in a second copy
+- Quick 260820-lo0: `sg_apply_immediately` in localStorage governs ALL Logs staging paths (right-click, selection batch, Add all), not just the dialog where the checkbox lives
+- Quick 260820-lo0: Add all acts on the VISIBLE set, not the selection, and its confirmation dialog is unconditional — unfiltered the visible set can be thousands of lines and hundreds of /24s
+- Quick 260820-lo0: /logs redirects to /logs/live; the sub-tab NavLinks match on the URL, so an index route left nothing highlighted
 - Quick 260820-kcg: Logs filter semantics — include terms AND, exclude terms OR, applied include → exclude → dedupe (excluding after dedupe could drop the kept line and leave its duplicates suppressed by a hidden one)
 - Quick 260820-kcg: LogBox is virtualized (@tanstack/react-virtual) with a FIXED row height, which requires `.log-row { white-space: pre }` + horizontal scroll — wrapped lines would make heights variable and defeat estimateSize. Auto-scroll sticks to the bottom only when already at the bottom
 - Quick 260820-kcg: Logs/Routes batch UI labels the RESULTING route count, not the line count — extractCidr collapses each destination to its /24, so N selected lines can stage fewer routes; the UI shows "N lines → M routes" when they differ
@@ -173,6 +177,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 | 260820-juc | Fix routing.sh silently dropping web-admin routes with inline descriptions; add routes_dirty tracking; make logs history cap honest | 2026-08-20 | 2a2c4dd | [260820-juc-fix-routing-sh-silently-dropping-web-adm](./quick/260820-juc-fix-routing-sh-silently-dropping-web-adm/) |
 | 260820-k3a | Routes page: checkbox batch delete, gate Apply Changes on routes_dirty, Fill Descriptions scope dialog | 2026-08-20 | e8720c9 | [260820-k3a-routes-page-checkbox-batch-delete-gate-a](./quick/260820-k3a-routes-page-checkbox-batch-delete-gate-a/) |
 | 260820-kcg | Logs page: context menu acts on selection, exclude filters, copy filtered, virtualized log view, honest truncation counter | 2026-08-20 | 600b663 | [260820-kcg-logs-page-context-menu-acts-on-selection](./quick/260820-kcg-logs-page-context-menu-acts-on-selection/) |
+| 260820-lo0 | Logs page: row checkboxes in select mode, Select All as tri-state checkbox, Add all dropdown with confirmation dialog, Apply immediately preference; Watch Live tab highlight and Routes table scrolling | 2026-08-20 | 53c500e | [260820-lo0-logs-page-row-checkboxes-in-select-mode-](./quick/260820-lo0-logs-page-row-checkboxes-in-select-mode-/) |
 
 ## Accumulated Context
 
