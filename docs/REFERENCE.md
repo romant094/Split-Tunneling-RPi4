@@ -978,6 +978,15 @@ and long lines scroll sideways instead of wrapping: variable row heights would d
 `estimateSize`. Auto-scroll sticks to the bottom only when the view is already there, so reading
 back through history is not interrupted by the next SSE line.
 
+**CIDR validation:** both the backend (`is_valid_cidr`) and the frontend
+(`isValidCidr`) require a real network address — host bits must be zero.
+`172.217.20.0/16` passes a shape-and-range check but iproute2 rejects it
+("Invalid prefix for given prefix length"), so accepting it only moves the failure
+into `routing.sh` on the RPi, where it surfaces as a silent per-run rejection in
+`install.log`. Rejections name the intended network (`Did you mean
+172.217.0.0/16?`) rather than saying "invalid CIDR", because the octets and the
+prefix are individually fine and only their combination is wrong.
+
 **Add all + Apply immediately (frontend):** `Add all` in the Logs toolbar opens a two-item dropdown
 (ISP / VPN) and then a confirmation dialog, and acts on the whole visible set rather than the
 selection — the "I have filtered the view down to what I want" path, no select mode needed. The
@@ -991,6 +1000,16 @@ flush-then-apply the Routes page runs. `routeApply.js` holds that logic (`flushA
 so the two entry points cannot drift on the ordering: bulk-write first, clear staging only once the
 write succeeded (CR-02), then `POST /api/config/apply`. On failure the entries stay staged and the
 message says so, leaving the Routes page as a working fallback.
+
+`Add all` is the only add path in the Logs toolbar: `SelectionBar` has no Add
+buttons of its own, and `Add all` switches to the selection whenever there is one,
+labelling the resulting route count. The line counter, `Copy` and `Download` sit
+in a `justify-between` row directly above the log box rather than in the top
+toolbar, where they wrapped onto a second line once Select and Add all arrived.
+
+The right-click menu is positioned from its measured size and flips above the
+cursor when it would overflow the viewport — right-clicking the bottom row of the
+log box otherwise put the lower items out of reach.
 
 Select mode shows a checkbox per row, pinned with `position: sticky` because rows are
 `white-space: pre` and scroll sideways. `Select all` is a tri-state checkbox rather than a button, so
