@@ -978,6 +978,32 @@ and long lines scroll sideways instead of wrapping: variable row heights would d
 `estimateSize`. Auto-scroll sticks to the bottom only when the view is already there, so reading
 back through history is not interrupted by the next SSE line.
 
+**Add all + Apply immediately (frontend):** `Add all` in the Logs toolbar opens a two-item dropdown
+(ISP / VPN) and then a confirmation dialog, and acts on the whole visible set rather than the
+selection — the "I have filtered the view down to what I want" path, no select mode needed. The
+dialog always appears, whatever the size: unfiltered, the visible set can be thousands of lines and
+hundreds of /24s, so `N visible lines → M routes` has to be read before it commits.
+
+The dialog's **Apply immediately** checkbox is a persisted preference (`localStorage`
+`sg_apply_immediately`) and governs *every* staging action on the Logs page — right-click, selection
+batch and Add all — not just the dialog it is shown in. When on, staging is followed by the same
+flush-then-apply the Routes page runs. `routeApply.js` holds that logic (`flushAndApply`) precisely
+so the two entry points cannot drift on the ordering: bulk-write first, clear staging only once the
+write succeeded (CR-02), then `POST /api/config/apply`. On failure the entries stay staged and the
+message says so, leaving the Routes page as a working fallback.
+
+Select mode shows a checkbox per row, pinned with `position: sticky` because rows are
+`white-space: pre` and scroll sideways. `Select all` is a tri-state checkbox rather than a button, so
+it reports state as well as offering an action — same component as the Routes table header.
+
+**Routes table scrolling:** the table scrolls inside its own block (`max-h-[60vh]`) with a sticky
+header rather than growing the page, so the toolbar, Apply button and row counter stay on screen
+while working through a few hundred routes.
+
+**Logs sub-tab routing:** `/logs` redirects to `/logs/live` rather than rendering `LogsLive` from an
+index route. The sub-tab `NavLink`s match on the URL, so at bare `/logs` none of them highlighted
+even though Watch Live was the visible pane.
+
 **Log history cap:** `/api/logs/history` tails each day's file to `HISTORY_DAY_CAP` (50000 lines)
 and reports the real line total, so the UI can distinguish a complete day from a tail. Before this,
 the response carried only the capped tail and the page rendered "5000 / 5000 lines" for a day with
