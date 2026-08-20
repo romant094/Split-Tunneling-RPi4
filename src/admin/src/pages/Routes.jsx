@@ -264,6 +264,64 @@ function DeleteConfirmDialog({ open, cidrs, busy, onClose, onConfirm }) {
   )
 }
 
+// Fill Descriptions used to start work on a single click and silently target only
+// the routes with an empty description. The scope is now an explicit choice, and
+// the counts are shown up front because lookups are sequential — one whois
+// request per route — so "all" on a large list is a real wait.
+function FillDescriptionsDialog({ open, missingCount, allCount, filtered, onClose, onConfirm }) {
+  const [scope, setScope] = useState('missing')
+
+  useEffect(() => { if (open) setScope('missing') }, [open])
+
+  const count = scope === 'missing' ? missingCount : allCount
+  const where = filtered ? 'in the current filtered selection' : 'in this list'
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Fill Descriptions</DialogTitle>
+          <DialogDescription>
+            Look up the owning organisation for each route via whois. Which routes {where} should be filled?
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <label className="flex items-start gap-2 rounded-md border border-border p-2.5 cursor-pointer hover:bg-accent/40">
+            <input type="radio" name="fill-scope" className="mt-0.5 accent-primary" checked={scope === 'missing'}
+              onChange={() => setScope('missing')} />
+            <span className="text-sm">
+              Only missing <span className="text-muted-foreground">({missingCount})</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">
+                Routes with no description yet. Existing descriptions are left alone.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 rounded-md border border-border p-2.5 cursor-pointer hover:bg-accent/40">
+            <input type="radio" name="fill-scope" className="mt-0.5 accent-primary" checked={scope === 'all'}
+              onChange={() => setScope('all')} />
+            <span className="text-sm">
+              All routes <span className="text-muted-foreground">({allCount})</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">
+                Re-looks-up every route and <strong>replaces existing descriptions</strong>. The results are staged and
+                shown under Pending changes — not applying them is the undo.
+              </span>
+            </span>
+          </label>
+          <p className="text-xs text-muted-foreground">
+            {count === 0
+              ? 'Nothing to fill for this choice.'
+              : `${count} whois lookup${count === 1 ? '' : 's'}, run one at a time.`}
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button disabled={count === 0} onClick={() => onConfirm(scope)}>Fill</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function SortIcon({ field, sortField, sortDir }) {
   if (sortField !== field) return <ArrowUpDown className="h-3 w-3 ml-1 text-muted-foreground/50" />
   return sortDir === 'asc'
@@ -290,6 +348,7 @@ function RouteSection({ endpoint, onServerMutation }) {
   const [staged, setStaged] = useState(() => getPending(endpoint))
   const [descEdits, setDescEdits] = useState(() => getPendingDescriptions(endpoint))
   const [fillProgress, setFillProgress] = useState(null)
+  const [fillDialog, setFillDialog] = useState(false)
 
   function load() {
     apiFetch(`/api/routes/${endpoint}`)
@@ -401,10 +460,14 @@ function RouteSection({ endpoint, onServerMutation }) {
     return { ok: true }
   }
 
-  async function fillDescriptions() {
-    const targets = sorted.filter(r => !(r.description || '').trim())
+  // Scope is chosen in FillDescriptionsDialog: 'missing' fills only routes with
+  // an empty description, 'all' re-looks-up everything and overwrites. Both
+  // operate on `sorted` — the filtered view — which the dialog states explicitly.
+  async function fillDescriptions(scope) {
+    setFillDialog(false)
+    const targets = scope === 'all' ? sorted : sorted.filter(r => !(r.description || '').trim())
     if (targets.length === 0) {
-      setMsg('No routes are missing a description.'); setMsgTone('info')
+      setMsg('No routes to fill for that choice.'); setMsgTone('info')
       return
     }
     const n = targets.length
@@ -481,7 +544,7 @@ function RouteSection({ endpoint, onServerMutation }) {
           <Button size="sm" variant="outline" onClick={() => setAddBulk(true)}>
             <List className="h-3.5 w-3.5 mr-1" />Add List
           </Button>
-          <Button size="sm" variant="outline" onClick={fillDescriptions} disabled={!!fillProgress}>
+          <Button size="sm" variant="outline" onClick={() => setFillDialog(true)} disabled={!!fillProgress}>
             <Wand2 className="h-3.5 w-3.5 mr-1" />
             {fillProgress ? `Looking up ${fillProgress.done}/${fillProgress.total}...` : 'Fill Descriptions'}
           </Button>
@@ -571,6 +634,10 @@ function RouteSection({ endpoint, onServerMutation }) {
 
       <AddSingleDialog open={addSingle} onClose={() => setAddSingle(false)} onAdd={handleAdd} existingCidrs={existingCidrs} />
       <AddBulkDialog open={addBulk} onClose={() => setAddBulk(false)} onBulkAdd={handleBulkAdd} />
+      <FillDescriptionsDialog open={fillDialog}
+        missingCount={sorted.filter(r => !(r.description || '').trim()).length}
+        allCount={sorted.length} filtered={!!filter}
+        onClose={() => setFillDialog(false)} onConfirm={fillDescriptions} />
       <EditDialog open={!!editEntry} entry={editEntry} onClose={() => setEditEntry(null)} onSave={handleEdit} existingCidrs={existingCidrs} />
       <DeleteConfirmDialog open={!!pendingDelete} cidrs={pendingDelete} busy={deleting}
         onClose={() => setPendingDelete(null)} onConfirm={handleDelete} />
