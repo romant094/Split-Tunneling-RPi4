@@ -39,6 +39,7 @@ set -euo pipefail
 WHITE_LIST_FILE="/etc/splitgate/white-list.txt"
 ISP_CUSTOM_FILE="/etc/splitgate/isp-routes-custom.txt"
 VPN_FORCE_FILE="/etc/splitgate/vpn-routes-custom.txt"
+LAST_APPLY_FILE="/etc/splitgate/.last-apply"
 SUBNET_TMP="/tmp/ru-subnets.tmp"
 IPTABLES_RULES="/etc/iptables/rules.v4"
 
@@ -377,6 +378,16 @@ fi
 mkdir -p /etc/iptables
 iptables-save > "${IPTABLES_RULES}"
 log "iptables rules saved to ${IPTABLES_RULES}"
+
+# ─── Stage 8b: Stamp the apply timestamp ─────────────────────────────────────
+# The web admin compares this file's mtime against the mtimes of
+# isp-routes-custom.txt / vpn-routes-custom.txt to decide whether its
+# "Apply Changes" button has anything to do (splitgate-admin.py _routes_dirty).
+# Stamped here rather than in the admin backend so EVERY apply path counts —
+# the admin's /api/config/apply, update-vpn-routes from cron, and the boot-time
+# vpn-routing.service all reach this point.
+touch "${LAST_APPLY_FILE}"
+log "Stage 8b: apply timestamp stamped at ${LAST_APPLY_FILE}"
 
 # ─── Stage 9: Verification log ────────────────────────────────────────────────
 # Informational only — failures here are not script errors.

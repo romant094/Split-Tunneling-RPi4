@@ -18,6 +18,7 @@ ADMIN_PORT = int(os.environ.get('ADMIN_PORT', 8080))
 VPN_CUSTOM_ROUTES = '/etc/splitgate/vpn-routes-custom.txt'
 ISP_CUSTOM_ROUTES = '/etc/splitgate/isp-routes-custom.txt'
 RU_EXCLUDE_PATH = '/etc/splitgate/ru-list-exclude.txt'
+LAST_APPLY_PATH = '/etc/splitgate/.last-apply'
 ENV_PATH = '/etc/splitgate/vpn-gateway.env'
 AWG_CONF_PATH = '/etc/amnezia/amneziawg/awg0.conf'
 LOG_DIR = '/etc/splitgate/logs'
@@ -222,6 +223,34 @@ def tail_file(path, n=200):
 def api_status():
     return jsonify(_collect_status())
 
+def _routes_dirty():
+    """True when a custom-route file has been edited since the last routing.sh run.
+
+    Drives the Routes page 'Apply Changes' button. Staged (client-side) entries
+    are not enough to decide this: the single add/edit/delete endpoints write to
+    the route files immediately and still need an apply to take effect, so a
+    frontend-only staging check would disable the button exactly when it matters.
+
+    routing.sh stamps LAST_APPLY_PATH on every successful run (Stage 8b), which
+    also covers applies from cron (update-vpn-routes) and from the boot-time
+    vpn-routing.service — not just /api/config/apply.
+
+    A missing stamp means "never applied", which counts as dirty. Missing route
+    files contribute nothing. stat only, no reads — /api/status is polled and
+    also streamed over SSE every 10s.
+    """
+    try:
+        last_apply = os.path.getmtime(LAST_APPLY_PATH)
+    except OSError:
+        return True
+    for path in (VPN_CUSTOM_ROUTES, ISP_CUSTOM_ROUTES):
+        try:
+            if os.path.getmtime(path) > last_apply:
+                return True
+        except OSError:
+            continue
+    return False
+
 def _collect_status():
     svc_statuses = {}
     for name in MANAGED_SERVICES:
@@ -249,6 +278,7 @@ def _collect_status():
         'ru_list_updated': ru_list_updated,
         'vpn_route_count': vpn_route_count, 'vpn_custom_count': vpn_custom_count,
         'isp_route_count': isp_route_count, 'ru_route_count': ru_route_count,
+        'routes_dirty': _routes_dirty(),
         'services': services,
     }
 
@@ -473,7 +503,9 @@ def api_routes_isp_bulk():
 def api_config_apply():
     r = subprocess.run([ROUTING_SH, '--no-update'], capture_output=True, text=True, timeout=120)
     if r.returncode == 0:
-        return jsonify({'ok': True})
+        # Echo the recomputed flag so the client can settle its Apply button
+        # immediately instead of waiting for the next /api/status poll.
+        return jsonify({'ok': True, 'routes_dirty': _routes_dirty()})
     return jsonify({'error': r.stderr.strip()}), 500
 
 @app.route('/api/config/exclude')
