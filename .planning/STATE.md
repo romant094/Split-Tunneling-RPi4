@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Quick task 260603-f8c complete — deploy-routes.sh added; docs updated
-last_updated: "2026-07-13T19:20:59.985Z"
+stopped_at: Quick task 260820-juc complete — routing.sh inline-comment fix, routes_dirty, honest log cap
+last_updated: "2026-08-20T11:17:13.739Z"
 progress:
   total_phases: 16
   completed_phases: 13
@@ -102,6 +102,9 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 - Phase 13 D-08: ru-exclude.txt → ru-list-exclude.txt across routing.sh, update-vpn-routes, deploy.sh (EXCLUDE_LIST vars + Stage 22c + comment), ru-list-exclude.txt.example; live migration SSH mv in deploy.sh Stage 22c
 - Phase 13 D-09: install log improvements — update-vpn-routes logs source domain, actual excluded CIDRs (not just count), route count after download; routing.sh logs excluded CIDRs explicitly + Stage 5b/5c entry counts
 - Phase 13 D-10: splitgate-watch.service created (ExecStart=watch-routes.py --daemon, Restart=on-failure, StandardError→watch-error.log); TOTAL_STAGES=28; Stage 28 deploys + enables; vpn-rollback.sh Step 1a stops/disables service; logrotate postrotate cleans watch-*.log >14d
+- Quick 260820-juc: route files are accepted in BOTH formats — leading-comment (repo `src/configs/*.txt`) and inline `cidr # desc` (written by the web admin). routing.sh `normalize_route_line()` is the single place that reconciles them; `add_route()` logs iproute2 rejections to install.log instead of swallowing them, with per-stage FAILED counters in the Stage 9 summary
+- Quick 260820-juc: `/etc/splitgate/.last-apply` is stamped by routing.sh Stage 8b (not by the admin backend) so every apply path counts — /api/config/apply, update-vpn-routes from cron, and boot-time vpn-routing.service. `splitgate-admin.py _routes_dirty()` compares custom-route-file mtimes against it; missing stamp = dirty
+- Quick 260820-juc: HISTORY_DAY_CAP=50000 per day for /api/logs/history; response carries `total`/`truncated`/`day_cap` so a capped tail is never presented as a complete day
 
 ## Hardware Verified
 
@@ -164,6 +167,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 | 260810-iym | Fix Logs page timestamps timezone — normalize watch-routes.py to UTC Z | 2026-08-10 | f759d53 | [260810-iym-fix-logs-page-timestamps-to-display-in-t](./quick/260810-iym-fix-logs-page-timestamps-to-display-in-t/) |
 | 260810-j0k | Bulk-fill route descriptions via whois lookup on Routes page | 2026-08-10 | 0dee1b9 | [260810-j0k-bulk-fill-route-descriptions-via-whois-l](./quick/260810-j0k-bulk-fill-route-descriptions-via-whois-l/) |
 | 260810-izt | Add Select All control to Logs page multi-select mode | 2026-08-10 | 4625532 | [260810-izt-add-select-all-control-to-logs-page-mult](./quick/260810-izt-add-select-all-control-to-logs-page-mult/) |
+| 260820-juc | Fix routing.sh silently dropping web-admin routes with inline descriptions; add routes_dirty tracking; make logs history cap honest | 2026-08-20 | 2a2c4dd | [260820-juc-fix-routing-sh-silently-dropping-web-adm](./quick/260820-juc-fix-routing-sh-silently-dropping-web-adm/) |
 
 ## Accumulated Context
 
