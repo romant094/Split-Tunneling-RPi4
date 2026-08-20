@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { apiFetch } from '../api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -271,7 +271,7 @@ function SortIcon({ field, sortField, sortDir }) {
     : <ArrowDown className="h-3 w-3 ml-1 text-primary" />
 }
 
-function RouteSection({ endpoint }) {
+function RouteSection({ endpoint, onServerMutation }) {
   const [routes, setRoutes] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('')
@@ -380,6 +380,7 @@ function RouteSection({ endpoint }) {
     setMsg(''); setMsgTone('error')
     const r = await apiFetch(`/api/routes/${endpoint}`, { method: 'POST', body: JSON.stringify(entry) })
     if (!r.ok) { const d = await r.json(); setMsg(d.error); setMsgTone('error'); load(); return { ok: false } }
+    onServerMutation?.()
     load()
     return { ok: true }
   }
@@ -387,7 +388,7 @@ function RouteSection({ endpoint }) {
   async function handleBulkAdd(entries) {
     const r = await apiFetch(`/api/routes/${endpoint}/bulk`, { method: 'POST', body: JSON.stringify({ entries }) })
     const d = await r.json()
-    if (r.ok) { load(); return { ok: true, added: d.added } }
+    if (r.ok) { onServerMutation?.(); load(); return { ok: true, added: d.added } }
     return { error: d.error || 'Error' }
   }
 
@@ -395,6 +396,7 @@ function RouteSection({ endpoint }) {
     setMsg(''); setMsgTone('error')
     const r = await apiFetch(`/api/routes/${endpoint}`, { method: 'PUT', body: JSON.stringify(payload) })
     if (!r.ok) { const d = await r.json(); setMsg(d.error); setMsgTone('error'); load(); return { ok: false } }
+    onServerMutation?.()
     load()
     return { ok: true }
   }
@@ -453,6 +455,7 @@ function RouteSection({ endpoint }) {
     setDeleting(false)
     setPendingDelete(null)
     setSelected(new Set())
+    if (removed > 0) onServerMutation?.()
     if (removed < targets.length) {
       setMsg(`Removed ${removed} of ${targets.length}. ${firstError}`)
       setMsgTone('error')
@@ -588,6 +591,46 @@ export default function RoutesPage() {
   const [applyMsg, setApplyMsg] = useState('')
   const [applying, setApplying] = useState(false)
   const [backingUp, setBackingUp] = useState(false)
+  // Server-side pending state: routes_dirty from /api/status, true when a custom
+  // route file has been edited since routing.sh last ran. Staged entries alone
+  // cannot answer "is there anything to apply?" — the single add/edit/delete
+  // endpoints write immediately and still need an apply, so a staging-only check
+  // would disable the button exactly when it is needed. Undefined means "not
+  // known yet / older backend without the field" and must read as enabled.
+  const [routesDirty, setRoutesDirty] = useState(undefined)
+  const [staged, setStaged] = useState({ vpn: [], isp: [], descriptions: { vpn: {}, isp: {} } })
+
+  useEffect(() => subscribeStaging(setStaged), [])
+
+  const refreshDirty = useCallback(async () => {
+    try {
+      const r = await apiFetch('/api/status')
+      if (!r.ok) return
+      const d = await r.json()
+      setRoutesDirty(d.routes_dirty)
+    } catch {
+      // leave the previous value — a failed poll must not disable the button
+    }
+  }, [])
+
+  useEffect(() => {
+    refreshDirty()
+    const id = setInterval(refreshDirty, 15000)
+    return () => clearInterval(id)
+  }, [refreshDirty])
+
+  // A mutation from this page hits the server immediately, so flip the button
+  // back on without waiting for the next poll. The next status read supersedes it.
+  const markDirty = useCallback(() => setRoutesDirty(true), [])
+
+  const stagedCount =
+    (staged.vpn?.length || 0) + (staged.isp?.length || 0) +
+    Object.keys(staged.descriptions?.vpn || {}).length +
+    Object.keys(staged.descriptions?.isp || {}).length
+  // Undefined routesDirty (field absent on an older backend, or first poll still
+  // in flight) counts as pending — degrade to today's always-enabled button
+  // rather than a permanently dead one.
+  const hasPending = routesDirty !== false || stagedCount > 0
 
   async function flushStagedList(list) {
     const entries = getPending(list)
@@ -636,10 +679,15 @@ export default function RoutesPage() {
       const r = await apiFetch('/api/config/apply', { method: 'POST' })
       const d = await r.json()
       setApplyMsg(r.ok ? '✓ Applied' : `Error: ${d.error}`)
+      // The apply response echoes the recomputed flag, so the button settles
+      // immediately instead of staying enabled until the next poll.
+      if (r.ok) setRoutesDirty(d.routes_dirty)
+      else refreshDirty()
       if (_reloaders.vpn) _reloaders.vpn()
       if (_reloaders.isp) _reloaders.isp()
     } catch {
       setApplyMsg('Error: apply failed')
+      refreshDirty()
     } finally {
       setApplying(false)
     }
@@ -667,7 +715,10 @@ export default function RoutesPage() {
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <Button onClick={downloadBackupNow} disabled={backingUp} size="sm" variant="outline">Download Backup</Button>
-          <Button onClick={applyRoutes} disabled={applying} size="sm">Apply Changes</Button>
+          <Button onClick={applyRoutes} disabled={applying || !hasPending} size="sm"
+            title={hasPending ? 'Activate pending route changes' : 'Nothing to apply — no route changes since the last apply'}>
+            Apply Changes
+          </Button>
           {applyMsg && <span className={`text-sm ${applyMsg.startsWith('Error') ? 'text-destructive' : 'text-primary'}`}>{applyMsg}</span>}
         </div>
       </div>
@@ -681,13 +732,13 @@ export default function RoutesPage() {
           <p className="text-sm text-muted-foreground mb-4">
             CIDRs in this list are force-routed through the AmneziaWG VPN tunnel — overrides the auto-downloaded RU list.
           </p>
-          <RouteSection endpoint="vpn" />
+          <RouteSection endpoint="vpn" onServerMutation={markDirty} />
         </TabsContent>
         <TabsContent value="isp" className="mt-4">
           <p className="text-sm text-muted-foreground mb-4">
             CIDRs in this list bypass the VPN and are routed directly via the ISP (Keenetic).
           </p>
-          <RouteSection endpoint="isp" />
+          <RouteSection endpoint="isp" onServerMutation={markDirty} />
         </TabsContent>
       </Tabs>
     </div>
