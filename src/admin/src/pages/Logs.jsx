@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { NavLink, Outlet, Navigate } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import { apiFetch } from '../api'
@@ -208,34 +209,74 @@ function LogContextMenu({ x, y, line, batchLines, onClose, onStage, onStageMany 
   )
 }
 
+// Must match .log-row in App.css: font-size 12px x line-height 1.6. The row is
+// `white-space: pre` so a long line scrolls horizontally instead of wrapping,
+// which is what keeps every row exactly one line tall and makes a fixed
+// estimateSize exact. Wrapping rows would need per-row measurement and would
+// defeat the point of virtualizing a 50000-line day.
+const LOG_ROW_HEIGHT = 19.2
+
 export function LogBox({
   lines, colorize = false, humanTime = false,
   interactive = false, selectMode = false, selected, onToggleSelect, onRowContextMenu,
 }) {
   const ref = useRef(null)
+  // Only stick to the bottom when the view is already there, so scrolling back
+  // through history is not yanked away by the next SSE line.
+  const atBottom = useRef(true)
+
+  const virtualizer = useVirtualizer({
+    count: lines.length,
+    getScrollElement: () => ref.current,
+    estimateSize: () => LOG_ROW_HEIGHT,
+    overscan: 24,
+  })
+
+  function onScroll() {
+    const el = ref.current
+    if (!el) return
+    // 4px slack: fractional row heights mean scrollTop rarely lands exactly.
+    atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 4
+  }
+
   useEffect(() => {
-    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight
-  }, [lines])
+    if (!lines.length || !atBottom.current) return
+    virtualizer.scrollToIndex(lines.length - 1, { align: 'end' })
+  }, [lines, virtualizer])
+
+  const items = virtualizer.getVirtualItems()
+
   return (
-    <div className="log-container" ref={ref}>
-      {lines.map((line, i) => {
-        let cls = 'log-row'
-        if (colorize) {
-          if (line.includes('[VPN]')) cls += ' log-line-vpn'
-          else if (line.includes('[ISP]')) cls += ' log-line-isp'
-        }
-        if (interactive && selectMode && selected && selected.has(line)) cls += ' log-row-selected'
-        const display = humanTime ? formatTs(line) : line
-        return (
-          <div key={i} className={cls}
-            onContextMenu={interactive ? (e) => { e.preventDefault(); onRowContextMenu && onRowContextMenu(e, line) } : undefined}
-            onClick={interactive && selectMode ? () => onToggleSelect && onToggleSelect(line) : undefined}
-          >
-            {display || ' '}
-          </div>
-        )
-      })}
-      {lines.length === 0 && <div className="text-muted-foreground">No output</div>}
+    <div className="log-container" ref={ref} onScroll={onScroll}>
+      {lines.length === 0 ? (
+        <div className="text-muted-foreground">No output</div>
+      ) : (
+        <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+          {items.map(item => {
+            const line = lines[item.index]
+            let cls = 'log-row'
+            if (colorize) {
+              if (line.includes('[VPN]')) cls += ' log-line-vpn'
+              else if (line.includes('[ISP]')) cls += ' log-line-isp'
+            }
+            if (interactive && selectMode && selected && selected.has(line)) cls += ' log-row-selected'
+            const display = humanTime ? formatTs(line) : line
+            return (
+              <div key={item.key} className={cls}
+                style={{
+                  position: 'absolute', top: 0, left: 0,
+                  width: '100%', height: item.size,
+                  transform: `translateY(${item.start}px)`,
+                }}
+                onContextMenu={interactive ? (e) => { e.preventDefault(); onRowContextMenu && onRowContextMenu(e, line) } : undefined}
+                onClick={interactive && selectMode ? () => onToggleSelect && onToggleSelect(line) : undefined}
+              >
+                {display || ' '}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -535,6 +576,9 @@ export function LogsHistory() {
   const [histToDate, setHistToDate] = useState(null)
   const [histToTime, setHistToTime] = useState('23:59')
   const [histLines, setHistLines] = useState([])
+  // Truncation metadata from /api/logs/history (260820-juc): the endpoint caps
+  // each day's tail, so `count` alone cannot tell a complete day from a tail.
+  const [histMeta, setHistMeta] = useState(null)
   const [histLoading, setHistLoading] = useState(false)
   const [histMsg, setHistMsg] = useState('')
   const [dedupe, setDedupe] = useState(false)
@@ -561,6 +605,7 @@ export function LogsHistory() {
       const d = await r.json()
       if (!r.ok) { setHistMsg(d.error || 'Error'); setHistLoading(false); return }
       setHistLines(d.lines || [])
+      setHistMeta({ total: d.total, truncated: d.truncated, dayCap: d.day_cap })
       setHistMsg(d.lines?.length ? `${d.lines.length} lines` : `No log data for ${fromDate}${toDate !== fromDate ? ` – ${toDate}` : ''}`)
     } catch { setHistMsg('Connection error') }
     setHistLoading(false)
@@ -621,7 +666,13 @@ export function LogsHistory() {
           <FilterBar filters={excludes} onChange={setExcludes} mode="exclude" />
           <LogsLegend />
           {stageMsg && <p className="text-xs text-primary">{stageMsg}</p>}
-          <p className="text-xs text-muted-foreground">{visible.length} / {histLines.length} lines shown</p>
+          <p className="text-xs text-muted-foreground">
+            {visible.length} / {histLines.length} lines shown
+            {histMeta?.truncated && (
+              <> — loaded the last {histLines.length} of {histMeta.total} logged
+                {histMeta.dayCap ? ` (capped at ${histMeta.dayCap} per day)` : ''}</>
+            )}
+          </p>
           <LogBox lines={visible} colorize={true} humanTime={true}
             interactive selectMode={selectMode} selected={selected} onToggleSelect={toggle}
             onRowContextMenu={onRowContextMenu} />

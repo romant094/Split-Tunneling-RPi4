@@ -3,7 +3,7 @@
   font-family: ui-monospace, monospace;
   font-size: 12px;
   line-height: 1.6;
-  overflow-y: auto;
+  overflow: auto;
   height: 500px;
   background: var(--log-bg, hsl(0 0% 5%));
   border: 1px solid var(--border-h);
@@ -19,5 +19,12 @@
 .dark .log-line-vpn { color: #00ffff; }
 .dark .log-line-isp  { color: #ffff00; }
 
+/* One line per row, no wrapping: the virtualized LogBox assumes a fixed row
+   height (LOG_ROW_HEIGHT = 12px x 1.6), and a wrapped line would break it.
+   Long lines scroll horizontally instead — conventional log-viewer behaviour. */
+.log-row {
+  white-space: pre;
+  height: 19.2px;
+}
 .log-row:hover { background: rgba(128, 128, 128, 0.18); }
 .log-row-selected { background: hsl(210 90% 50% / 0.28) !important; }
