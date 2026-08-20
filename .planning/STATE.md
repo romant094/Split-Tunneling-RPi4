@@ -7,10 +7,10 @@ stopped_at: 2026-08-20 web-admin fix batch archived — see .planning/quick/2608
 last_updated: "2026-08-20T14:30:00.765Z"
 progress:
   total_phases: 16
-  completed_phases: 13
+  completed_phases: 15
   total_plans: 42
-  completed_plans: 34
-  percent: 81
+  completed_plans: 41
+  percent: 94
 ---
 
 # State: RPi VPN Gateway
@@ -20,16 +20,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Non-RU traffic exits through AmneziaWG VPN; RU traffic exits direct via ISP — transparent to LAN devices, survives reboots, fully reversible.
-**Current focus:** Phase 16 — Web Admin UX Upgrade
+**Current focus:** none — no phase in progress. Phase 14 (domain-based routing via dnsmasq ipset) is the only unstarted phase.
 
 ## Current Phase
 
-**Phase 13: Log Monitoring, Routing Refinement & Daemon — COMPLETE (4/4 plans)**
+**None in progress.** Phase 16 (Web Admin UX Upgrade) closed 7/7. The most recent
+work was the 2026-08-20 web-admin fix batch, tracked as quick tasks rather than a
+phase — see [260820-web-admin-fix-batch.md](./quick/260820-web-admin-fix-batch.md)
+for what shipped and six open items.
 
-10-00 complete: all source dirs moved to src/.
-10-01 complete: all internal /etc/ paths in 7 scripts/units migrated to /etc/splitgate/; vpn-rollback.sh D-18 teardown added.
-10-02 complete: deploy.sh *_REMOTE vars updated to /etc/splitgate/; 3 new stages (5: mkdir /etc/splitgate/logs, 26: dispatcher, 27: logrotate); TOTAL_STAGES=27; Stage 21b header bug fixed.
-10-03 complete: src/scripts/splitgate dispatcher created (exec-based, 5 subcommands); src/configs/logrotate-vpn-gateway created (targets /etc/splitgate/logs/vpn-gateway.log); README.md + docs/README.ru.md updated with splitgate CLI, filesystem layout, D-18 rollback docs.
+**Next candidate:** Phase 14 — domain-based routing via dnsmasq ipset. It is the
+only phase with no work started: `.planning/phases/14-.../` holds a `SPEC.md` and
+nothing else, and its ROADMAP goal is still `[To be planned]`.
+
+**Known artifact gap:** Phase 11 is marked complete and the work did ship (README
+is trimmed, `docs/REFERENCE.md` exists), but `11-01-SUMMARY.md` was never written.
+It is the only one of 42 plans without a SUMMARY.
 
 ## Phase Progress
 
@@ -40,14 +46,17 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 | 3 — Autostart, Cron & Rollback | ✓ Complete | 3/3 done | 100% |
 | 4 — Traffic Logging & Visibility | ✓ Complete | 3/3 done | 100% |
 | 5 — Custom Route Exceptions | ✓ Complete | 2/2 done | 100% |
-| 6 — Documentation | ◆ Planned | 0/2 | 0% |
+| 6 — Documentation | ✓ Complete | 2/2 done | 100% |
 | 7 — ASN Enrichment & Traffic Attribution | ✓ Complete | 3/3 done | 100% |
 | 8 — RU IP List Exclusion Filter | ✓ Complete | 3/3 done | 100% |
 | 9 — Operational Logging | ✓ Complete | 1/1 done | 100% |
 | 10 — Splitgate Ergonomics & Organization | ✓ Complete | 4/4 done | 100% |
-| 11 — README Documentation Overhaul | ✓ Complete | 1/1 done | 100% |
+| 11 — README Documentation Overhaul | ✓ Complete (SUMMARY missing) | 1/1 done | 100% |
 | 12 — Buffered ASN Output | ✓ Complete | 1/1 done | 100% |
 | 13 — Log Monitoring, Routing Refinement & Daemon | ✓ Complete | 4/4 done | 100% |
+| 14 — Domain-based routing via dnsmasq ipset | ○ Not planned | 0/0 | 0% |
+| 15 — Web Admin Interface | ✓ Complete | 4/4 done | 100% |
+| 16 — Web Admin UX Upgrade | ✓ Complete | 7/7 done | 100% |
 
 ## Requirements
 

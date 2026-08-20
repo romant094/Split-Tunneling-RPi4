@@ -15,14 +15,17 @@
 | 3 | Autostart, Cron & Rollback | Survives reboots, daily refresh, one-command rollback | ✓ Complete |
 | 4 | Traffic Logging & Visibility | Per-connection VPN/ISP routing decisions logged and queryable | ✓ Complete |
 | 5 | Custom Route Exceptions | Per-CIDR ISP-bypass exceptions on top of auto-downloaded RU list | ✓ Complete |
-| 6 | Documentation | Ops runbook: deploy, verify, rollback, add exceptions | ◆ Planned |
+| 6 | Documentation | Ops runbook: deploy, verify, rollback, add exceptions | ✓ Complete |
 | 7 | ASN Enrichment & Traffic Attribution | Enrich vpn-status.sh and watch-routes.py with ISP/org via Team Cymru | ✓ Complete |
 | 8 | RU IP List Exclusion Filter | Exclude specific CIDRs from downloaded RU list so they route via VPN | ✓ Complete |
-| 9 | Operational Logging | Centralized logs for diagnosing system failures; 14-day rotation | ○ Pending |
+| 9 | Operational Logging | Centralized logs for diagnosing system failures; 14-day rotation | ✓ Complete |
 | 10 | Splitgate Ergonomics & Organization | Consolidate RPi files under /etc/splitgate/, splitgate dispatcher CLI, log rotation | ✓ Complete |
 | 11 | README Documentation Overhaul | Trim README to 3 quick-start sections; all technical detail in docs/REFERENCE.md | ✓ Complete |
 | 12 | Buffered ASN Output | Hold watch-routes.py lines until ASN lookup completes; flush after BUFFER_TIMEOUT | ✓ Complete |
 | 13 | Log Monitoring, Routing Refinement & Daemon | Daemon mode for watch-routes.py (✓/✗ status), install.log + ru-list-exclude.txt renames, isp-routes-custom.txt RU CIDRs | ✓ Complete |
+| 14 | Domain-based routing via dnsmasq ipset | Route by domain name rather than CIDR, using dnsmasq to populate an ipset | ○ Not planned |
+| 15 | Web Admin Interface | React SPA + Flask backend on the RPi — manage the gateway from any LAN device without SSH | ✓ Complete |
+| 16 | Web Admin UX Upgrade | Daily-usability pass over the admin: log viewing, persistent auth, diagnostics, route backup, non-destructive redeploy | ✓ Complete |
 
 ---
 
@@ -352,10 +355,13 @@ Plans:
 **Goal:** [To be planned]
 **Requirements**: TBD
 **Depends on:** Phase 13
-**Plans:** 0 plans
+**Plans:** 0 plans — only `14-domain-based-routing-via-dnsmasq-ipset/SPEC.md` exists
+
+The one phase with no work started. Everything else in this roadmap is complete
+apart from the missing `11-01-SUMMARY.md` artifact noted under Phase 11.
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 14 to break down)
+- [ ] TBD (run /gsd:plan-phase 14 to break down)
 
 ---
 
@@ -370,22 +376,22 @@ Plans:
 - WEB-05: Auth: simple password protection (single shared secret, no multi-user needed)
 - WEB-06: Deploy: runs as systemd service on RPi; accessible at http://192.168.1.254:PORT from LAN
 **Depends on:** Phase 13 (daemon + logs), Phase 14 (dnsmasq ipset, optional)
-**Plans:** 4 plans
+**Plans:** 4/4 plans complete
 
 Plans:
 
 **Wave 1:**
 
-- [ ] 15-01-PLAN.md — Flask backend (src/scripts/splitgate-admin.py): HTTP Basic Auth, static file serving for React SPA dist/, all 17+ API endpoints (status, services, routes, logs SSE, config, settings, rollback); src/admin/.gitignore [WEB-01..WEB-06]
+- [x] 15-01-PLAN.md — Flask backend (src/scripts/splitgate-admin.py): HTTP Basic Auth, static file serving for React SPA dist/, all 17+ API endpoints (status, services, routes, logs SSE, config, settings, rollback); src/admin/.gitignore [WEB-01..WEB-06]
 
 **Wave 2 (parallel after Wave 1):**
 
-- [ ] 15-02-PLAN.md — React SPA (src/admin/): Vite+React scaffold, 6 pages (Dashboard/Services/Routes/Logs/Config/Settings), HashRouter, SSE EventSource on Logs page, service button state rules per D-12, Rollback modal per D-14; npm run build + dist/ committed [WEB-01..WEB-04]
-- [ ] 15-03-PLAN.md — Systemd unit (src/systemd/splitgate-admin.service) + deploy.sh Stage 29 conditional deploy (TOTAL_STAGES=29) + vpn-rollback.sh admin teardown + ADMIN_PORT=8080 in .env [WEB-05, WEB-06]
+- [x] 15-02-PLAN.md — React SPA (src/admin/): Vite+React scaffold, 6 pages (Dashboard/Services/Routes/Logs/Config/Settings), HashRouter, SSE EventSource on Logs page, service button state rules per D-12, Rollback modal per D-14; npm run build + dist/ committed [WEB-01..WEB-04]
+- [x] 15-03-PLAN.md — Systemd unit (src/systemd/splitgate-admin.service) + deploy.sh Stage 29 conditional deploy (TOTAL_STAGES=29) + vpn-rollback.sh admin teardown + ADMIN_PORT=8080 in .env [WEB-05, WEB-06]
 
 **Wave 3 (after Wave 2):**
 
-- [ ] 15-04-PLAN.md — splitgate admin subcommand (status/start/stop/restart) + README.md Web Admin section + docs/REFERENCE.md full API table + docs/README.ru.md Russian translation + .planning/STATE.md Phase 15 decisions [WEB-05, WEB-06]
+- [x] 15-04-PLAN.md — splitgate admin subcommand (status/start/stop/restart) + README.md Web Admin section + docs/REFERENCE.md full API table + docs/README.ru.md Russian translation + .planning/STATE.md Phase 15 decisions [WEB-05, WEB-06]
 
 ### Phase 16: Web Admin UX Upgrade
 
@@ -421,4 +427,4 @@ Plans:
 
 ---
 *Created: 2026-05-18*
-*Updated: 2026-07-13 — Phase 16 planned: 7 plans across 3 waves*
+*Updated: 2026-08-20 — statuses synced to phase artifacts: Phases 6, 9 and 15 marked complete (their plans all have SUMMARYs), Phases 14-16 added to the Overview table. Phase 14 is the only phase with no work started.*
