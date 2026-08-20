@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Quick task 260820-juc complete — routing.sh inline-comment fix, routes_dirty, honest log cap
+stopped_at: Quick task 260820-k3a complete — Routes page batch delete, Apply gating, Fill Descriptions dialog
 last_updated: "2026-08-20T11:17:13.739Z"
 progress:
   total_phases: 16
@@ -168,6 +168,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 | 260810-j0k | Bulk-fill route descriptions via whois lookup on Routes page | 2026-08-10 | 0dee1b9 | [260810-j0k-bulk-fill-route-descriptions-via-whois-l](./quick/260810-j0k-bulk-fill-route-descriptions-via-whois-l/) |
 | 260810-izt | Add Select All control to Logs page multi-select mode | 2026-08-10 | 4625532 | [260810-izt-add-select-all-control-to-logs-page-mult](./quick/260810-izt-add-select-all-control-to-logs-page-mult/) |
 | 260820-juc | Fix routing.sh silently dropping web-admin routes with inline descriptions; add routes_dirty tracking; make logs history cap honest | 2026-08-20 | 2a2c4dd | [260820-juc-fix-routing-sh-silently-dropping-web-adm](./quick/260820-juc-fix-routing-sh-silently-dropping-web-adm/) |
+| 260820-k3a | Routes page: checkbox batch delete, gate Apply Changes on routes_dirty, Fill Descriptions scope dialog | 2026-08-20 | e8720c9 | [260820-k3a-routes-page-checkbox-batch-delete-gate-a](./quick/260820-k3a-routes-page-checkbox-batch-delete-gate-a/) |
 
 ## Accumulated Context
 
