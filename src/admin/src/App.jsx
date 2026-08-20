@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { HashRouter, Routes, Route, NavLink } from 'react-router-dom'
+import { HashRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { Shield, LayoutDashboard, Server, Route as RouteIcon, FileText, Settings2, Cog, LogOut, Menu, X, Activity } from 'lucide-react'
 import { setAuth, clearAuth, apiFetch, apiLogout, checkAuth } from './api'
 import { subscribeMeta } from './logStream'
@@ -217,7 +217,10 @@ export default function App() {
             <Route path="/services" element={<Services />} />
             <Route path="/routes" element={<RoutesPage />} />
             <Route path="/logs" element={<LogsLayout />}>
-              <Route index element={<LogsLive />} />
+              {/* Redirect rather than rendering LogsLive directly: the sub-tab
+                  NavLinks match on the URL, so at /logs nothing was highlighted
+                  even though Watch Live was the visible pane. */}
+              <Route index element={<Navigate to="live" replace />} />
               <Route path="live" element={<LogsLive />} />
               <Route path="history" element={<LogsHistory />} />
               <Route path="install" element={<LogsInstall />} />

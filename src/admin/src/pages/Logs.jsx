@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { NavLink, Outlet, Navigate } from 'react-router-dom'
+import { NavLink, Outlet } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import { apiFetch } from '../api'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Download, Plus, X, Filter, EyeOff, Copy, CalendarIcon, MousePointerClick } from 'lucide-react'
 import { setOnPage, setBgMode as setStreamBgMode, subscribeLines, subscribeMeta, clearLines } from '../logStream'
 import { stageAdd, stageAddMany } from '../routeStaging'
@@ -261,17 +262,31 @@ export function LogBox({
             }
             if (interactive && selectMode && selected && selected.has(line)) cls += ' log-row-selected'
             const display = humanTime ? formatTs(line) : line
+            const showCheckbox = interactive && selectMode
             return (
-              <div key={item.key} className={cls}
-                style={{
-                  position: 'absolute', top: 0, left: 0,
-                  width: '100%', height: item.size,
-                  transform: `translateY(${item.start}px)`,
-                }}
-                onContextMenu={interactive ? (e) => { e.preventDefault(); onRowContextMenu && onRowContextMenu(e, line) } : undefined}
-                onClick={interactive && selectMode ? () => onToggleSelect && onToggleSelect(line) : undefined}
-              >
-                {display || ' '}
+                <div key={item.key} className={cls}
+                  style={{
+                    position: 'absolute', top: 0, left: 0,
+                    width: '100%', height: item.size,
+                    transform: `translateY(${item.start}px)`,
+                    display: showCheckbox ? 'flex' : undefined,
+                    alignItems: showCheckbox ? 'center' : undefined,
+                  }}
+                  onContextMenu={interactive ? (e) => { e.preventDefault(); onRowContextMenu && onRowContextMenu(e, line) } : undefined}
+                  onClick={showCheckbox ? () => onToggleSelect && onToggleSelect(line) : undefined}
+                >
+                  {showCheckbox && (
+                    // sticky so the checkbox stays put when a long line is
+                    // scrolled sideways — rows are white-space: pre and scroll
+                    // horizontally, so a static checkbox would slide off-screen.
+                    <Checkbox
+                      className="log-row-check"
+                      checked={!!(selected && selected.has(line))}
+                      onChange={() => onToggleSelect && onToggleSelect(line)}
+                      onClick={e => e.stopPropagation()}
+                      aria-label="Select this line" />
+                  )}
+                <span style={{ whiteSpace: 'pre' }}>{display || ' '}</span>
               </div>
             )
           })}

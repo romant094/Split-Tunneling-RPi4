@@ -26,5 +26,14 @@
   white-space: pre;
   height: 19.2px;
 }
+/* Rows scroll horizontally, so the select-mode checkbox is pinned to the left
+   edge — a static one would slide out of view on a long line. */
+.log-row-check {
+  position: sticky;
+  left: 0;
+  margin-right: 6px;
+  flex-shrink: 0;
+  background: var(--log-bg, hsl(0 0% 5%));
+}
 .log-row:hover { background: rgba(128, 128, 128, 0.18); }
 .log-row-selected { background: hsl(210 90% 50% / 0.28) !important; }

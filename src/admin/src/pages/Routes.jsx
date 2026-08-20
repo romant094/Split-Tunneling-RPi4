@@ -576,9 +576,13 @@ function RouteSection({ endpoint, onServerMutation }) {
           {filter ? 'No routes match the filter.' : 'No routes configured.'}
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-md border border-border">
+        // Scroll inside the table block rather than growing the page: with a few
+        // hundred routes the toolbar, Apply button and row counter would otherwise
+        // be scrolled off-screen while working through the list. The sticky header
+        // keeps the column labels and the select-all checkbox reachable.
+        <div className="overflow-auto rounded-md border border-border max-h-[60vh]">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-card">
               <TableRow>
                 <TableHead className="w-8">
                   <Checkbox
