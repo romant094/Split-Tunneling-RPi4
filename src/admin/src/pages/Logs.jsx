@@ -107,7 +107,10 @@ function extractOrg(line) {
   return line.slice(idx + 1).trim()
 }
 
-function LogContextMenu({ x, y, line, onClose, onStage }) {
+// Acts on the whole selection when the right-clicked line is part of it —
+// otherwise a user who had just selected several rows would silently stage only
+// the one under the cursor. `batchLines` is null for the single-line case.
+function LogContextMenu({ x, y, line, batchLines, onClose, onStage, onStageMany }) {
   const ref = useRef(null)
   useEffect(() => {
     function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) onClose() }
@@ -120,26 +123,45 @@ function LogContextMenu({ x, y, line, onClose, onStage }) {
     }
   }, [onClose])
 
+  const batch = batchLines && batchLines.length > 1 ? batchLines : null
   const cidr = extractCidr(line)
+  // Destinations collapse to their /24, so N selected lines can yield fewer
+  // routes. Label the routes, not the lines.
+  const batchEntries = batch ? selectedToEntries(batch) : []
+  const canAct = batch ? batchEntries.length > 0 : !!cidr
 
   async function copy() {
-    try { await navigator.clipboard.writeText(line) } catch { /* clipboard unavailable — no-op */ }
+    const text = batch ? batch.join('\n') : line
+    try { await navigator.clipboard.writeText(text) } catch { /* clipboard unavailable — no-op */ }
     onClose()
   }
   function add(list) {
-    if (!cidr) return
-    onStage(list, cidr, extractOrg(line))
+    if (!canAct) return
+    if (batch) onStageMany(list, batchEntries)
+    else onStage(list, cidr, extractOrg(line))
     onClose()
   }
+
+  const n = batchEntries.length
+  const label = batch
+    ? l => `Add ${n} route${n === 1 ? '' : 's'} to ${l} list`
+    : l => `Add route to ${l} list`
 
   return (
     <div ref={ref} className="fixed z-50 min-w-56 rounded-md border border-border bg-popover text-popover-foreground shadow-md py-1 text-sm"
       style={{ top: y, left: x }}>
-      <button className="w-full text-left px-3 py-1.5 hover:bg-accent cursor-pointer" onClick={copy}>Copy</button>
+      <button className="w-full text-left px-3 py-1.5 hover:bg-accent cursor-pointer" onClick={copy}>
+        {batch ? `Copy ${batch.length} lines` : 'Copy'}
+      </button>
       <button className="w-full text-left px-3 py-1.5 hover:bg-accent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-        disabled={!cidr} onClick={() => add('isp')}>Add route to ISP list</button>
+        disabled={!canAct} onClick={() => add('isp')}>{label('ISP')}</button>
       <button className="w-full text-left px-3 py-1.5 hover:bg-accent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-        disabled={!cidr} onClick={() => add('vpn')}>Add route to VPN list</button>
+        disabled={!canAct} onClick={() => add('vpn')}>{label('VPN')}</button>
+      {batch && batch.length !== n && (
+        <p className="px-3 py-1 text-xs text-muted-foreground border-t border-border mt-1 pt-1.5">
+          {batch.length} lines → {n} /24 route{n === 1 ? '' : 's'}
+        </p>
+      )}
     </div>
   )
 }
@@ -234,7 +256,7 @@ function selectedToEntries(selected) {
   return entries
 }
 
-function SelectionBar({ selectMode, onEnter, count, onClear, onAddIsp, onAddVpn, total, onToggleAll }) {
+function SelectionBar({ selectMode, onEnter, count, routeCount, onClear, onAddIsp, onAddVpn, total, onToggleAll }) {
   if (!selectMode) {
     return (
       <Button size="sm" variant="outline" className="h-8" onClick={onEnter}>
@@ -243,17 +265,23 @@ function SelectionBar({ selectMode, onEnter, count, onClear, onAddIsp, onAddVpn,
     )
   }
   const allSelected = total > 0 && count === total
+  // The buttons promise routeCount, not count: selectedToEntries collapses each
+  // destination to its /24, so several selected lines from one subnet stage a
+  // single route. Labelling the line count made the button overstate the result.
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-xs text-muted-foreground">{count} selected</span>
+      <span className="text-xs text-muted-foreground">
+        {count} selected
+        {count !== routeCount && <> → {routeCount} route{routeCount === 1 ? '' : 's'}</>}
+      </span>
       <Button size="sm" variant="outline" className="h-8" disabled={total === 0} onClick={onToggleAll}>
         {allSelected ? 'Deselect All' : `Select All (${total})`}
       </Button>
-      <Button size="sm" variant="outline" className="h-8" disabled={!count} onClick={onAddIsp}>
-        Add {count} to ISP
+      <Button size="sm" variant="outline" className="h-8" disabled={!routeCount} onClick={onAddIsp}>
+        Add {routeCount} to ISP
       </Button>
-      <Button size="sm" variant="outline" className="h-8" disabled={!count} onClick={onAddVpn}>
-        Add {count} to VPN
+      <Button size="sm" variant="outline" className="h-8" disabled={!routeCount} onClick={onAddVpn}>
+        Add {routeCount} to VPN
       </Button>
       <Button size="sm" variant="ghost" className="h-8" onClick={onClear}>Clear selection</Button>
     </div>
@@ -400,11 +428,14 @@ export function LogsLive() {
   const visible = dedupe ? dedupeLines(filtered) : filtered
   const filename = `splitgate-live-${format(new Date(), 'yyyy-MM-dd')}.txt`
 
+  // Right-clicking a row that is part of the selection acts on the whole
+  // selection; right-clicking outside it stays a single-line action.
   function onRowContextMenu(e, line) {
-    setCtxMenu({ x: e.clientX, y: e.clientY, line })
+    const batchLines = selectMode && selected.has(line) ? [...selected] : null
+    setCtxMenu({ x: e.clientX, y: e.clientY, line, batchLines })
   }
-  function batchStage(list) {
-    stageMany(list, selectedToEntries(selected))
+  function batchStage(list, entries) {
+    stageMany(list, entries || selectedToEntries(selected))
     exit()
   }
 
@@ -422,7 +453,7 @@ export function LogsLive() {
           Hide duplicates
         </Button>
         <SelectionBar selectMode={selectMode} onEnter={() => setSelectMode(true)}
-          count={selected.size} onClear={exit}
+          count={selected.size} routeCount={selectedToEntries(selected).length} onClear={exit}
           onAddIsp={() => batchStage('isp')} onAddVpn={() => batchStage('vpn')}
           total={visible.length} onToggleAll={() => selectAll(visible)} />
         <span className="text-muted-foreground text-xs ml-auto">{visible.length} / {liveLines.length} lines</span>
@@ -437,8 +468,8 @@ export function LogsLive() {
         interactive selectMode={selectMode} selected={selected} onToggleSelect={toggle}
         onRowContextMenu={onRowContextMenu} />
       {ctxMenu && (
-        <LogContextMenu x={ctxMenu.x} y={ctxMenu.y} line={ctxMenu.line}
-          onClose={() => setCtxMenu(null)} onStage={stage} />
+        <LogContextMenu x={ctxMenu.x} y={ctxMenu.y} line={ctxMenu.line} batchLines={ctxMenu.batchLines}
+          onClose={() => setCtxMenu(null)} onStage={stage} onStageMany={batchStage} />
       )}
     </div>
   )
@@ -459,10 +490,11 @@ export function LogsHistory() {
   const { selectMode, setSelectMode, selected, toggle, exit, selectAll } = useSelection()
 
   function onRowContextMenu(e, line) {
-    setCtxMenu({ x: e.clientX, y: e.clientY, line })
+    const batchLines = selectMode && selected.has(line) ? [...selected] : null
+    setCtxMenu({ x: e.clientX, y: e.clientY, line, batchLines })
   }
-  function batchStage(list) {
-    stageMany(list, selectedToEntries(selected))
+  function batchStage(list, entries) {
+    stageMany(list, entries || selectedToEntries(selected))
     exit()
   }
 
@@ -515,7 +547,7 @@ export function LogsHistory() {
         )}
         {histLines.length > 0 && (
           <SelectionBar selectMode={selectMode} onEnter={() => setSelectMode(true)}
-            count={selected.size} onClear={exit}
+            count={selected.size} routeCount={selectedToEntries(selected).length} onClear={exit}
             onAddIsp={() => batchStage('isp')} onAddVpn={() => batchStage('vpn')}
             total={visible.length} onToggleAll={() => selectAll(visible)} />
         )}
@@ -537,8 +569,8 @@ export function LogsHistory() {
             interactive selectMode={selectMode} selected={selected} onToggleSelect={toggle}
             onRowContextMenu={onRowContextMenu} />
           {ctxMenu && (
-            <LogContextMenu x={ctxMenu.x} y={ctxMenu.y} line={ctxMenu.line}
-              onClose={() => setCtxMenu(null)} onStage={stage} />
+            <LogContextMenu x={ctxMenu.x} y={ctxMenu.y} line={ctxMenu.line} batchLines={ctxMenu.batchLines}
+              onClose={() => setCtxMenu(null)} onStage={stage} onStageMany={batchStage} />
           )}
         </>
       )}
