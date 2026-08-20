@@ -9,15 +9,18 @@
 # dropped (harmless). If a CIDR here conflicts with vpn-routes-custom.txt,
 # vpn-routes-custom.txt wins (applied last).
 #
-# FORMAT: One CIDR per line. Lines starting with # are comments. No inline
-# comments after a CIDR — ip route reads the whole line as the route argument.
+# FORMAT: One CIDR per line. Lines starting with # are comments, and an inline
+# comment after a CIDR (e.g. "23.55.0.0/16 # Akamai") is also accepted —
+# routing.sh normalize_route_line() strips it before calling ip route. The web
+# admin writes this inline form, so both styles coexist in the same file.
 #
 # HOW TO USE:
 #   1. Run: ssh pi4 "sudo /etc/splitgate/vpn-status.sh --via=vpn" to identify
 #      IPs exiting via VPN that should go direct
 #   2. Resolve to a CIDR (via whois or ipinfo.io)
 #   3. cp src/configs/isp-routes-custom.txt.example src/configs/isp-routes-custom.txt
-#   4. Add CIDRs (one per line, no inline comments)
+#   4. Add CIDRs, one per line. Comments may be on their own line or inline
+#      after the CIDR (e.g. "23.55.0.0/16 # Akamai") — both are accepted.
 #   5. Run: ./src/deploy.sh — Stage 21 deploys to /etc/splitgate/isp-routes-custom.txt
 #      and routing.sh Stage 5b loads the routes on activation.
 #

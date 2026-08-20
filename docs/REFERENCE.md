@@ -222,7 +222,7 @@ Alternatively: `https://ipinfo.io/<destination-ip>`
 cp src/configs/isp-routes-custom.txt.example src/configs/isp-routes-custom.txt
 ```
 
-Edit and add CIDRs (one per line, whole-line comments only, no inline comments):
+Edit and add CIDRs, one per line. Comments work either way — on their own line, or inline after the CIDR:
 
 ```
 23.55.0.0/16
@@ -285,7 +285,7 @@ whois <destination-ip>
 cp src/configs/vpn-routes-custom.txt.example src/configs/vpn-routes-custom.txt
 ```
 
-Edit and add CIDRs (one per line, whole-line comments only, no inline comments):
+Edit and add CIDRs, one per line. Comments work either way — on their own line, or inline after the CIDR:
 
 ```
 77.88.0.0/18
@@ -441,6 +441,8 @@ bash src/deploy.sh
 ├── isp-routes-custom.txt       (optional — ISP-bypass custom routes; 11 active RU CIDRs pre-populated)
 ├── vpn-routes-custom.txt       (optional — VPN-force custom routes; commented candidate block included)
 ├── ru-list-exclude.txt         (optional — server-side RU list exclusions)
+├── .last-apply                 (generated — timestamp of the last successful routing.sh run; drives routes_dirty)
+├── admin/                      (built React SPA served by splitgate-admin)
 └── logs/
     ├── install.log             (output from routing.sh and update-vpn-routes)
     ├── watch-YYYY-MM-DD.log    (daily connection log written by splitgate-watch.service)
@@ -521,7 +523,21 @@ Flush-and-rebuild split-tunnel routing. Idempotent — safe to re-run at any tim
 On each run: downloads RU CIDRs → flushes existing VPN routes → adds VPN server host route →
 adds RU CIDR routes via `KEENETIC_GW` → loads `isp-routes-custom.txt` (Stage 5b, if present) →
 loads `vpn-routes-custom.txt` (Stage 5c, if present — overrides any ISP routes for those CIDRs) →
-sets default route via `awg0` → configures MASQUERADE and iptables LOG rules → saves via `iptables-save`.
+sets default route via `awg0` → configures MASQUERADE and iptables LOG rules → saves via `iptables-save` →
+stamps `/etc/splitgate/.last-apply` (Stage 8b).
+
+**Route-file line format.** Stages 5, 5b and 5c all pass every line through
+`normalize_route_line()`, which strips an inline comment and trims whitespace, so both
+`# Akamai` on its own line and `2.21.65.0/24 # Akamai` work. This matters because the web admin
+writes the inline form: before the normalisation existed, those stages skipped only lines
+*starting* with `#` and handed the rest of the line straight to `ip route`, so every route added
+through the web admin **with a description** was rejected — silently, since the error went to
+`/dev/null` while the stage counter still incremented. `add_route()` now logs any rejected CIDR
+and the iproute2 message to `install.log` and keeps a per-stage failure tally that appears in the
+Stage 9 summary, so a regression of this shape is visible rather than invisible.
+
+Note that `ru-list-exclude.txt` is unrelated and still requires whole-line comments — Stage 1
+appends each of its lines to the download URL, not to `ip route`.
 
 | Flag | Description |
 |------|-------------|
@@ -846,6 +862,9 @@ ssh pi4 "sudo /etc/splitgate/routing.sh"
 | 260521-jex | Add `scripts/watch-routes.py` — real-time iptables log enricher with rDNS caching | cf6bafa |
 | 260523-nmr | Fix NM carrier-change route flush — add NM dispatcher (`10-vpn-routes`) + fallback rebuild in `update-vpn-routes` | 847ff31 |
 | 260603-f8c | Add `src/deploy-routes.sh` — fast custom-routes-only deploy (SCP isp/vpn-routes-custom.txt + routing.sh --no-update) | 0d0bec6 |
+| 260820-juc | Fix `routing.sh` silently dropping web-admin routes written as `cidr # desc`; stamp `.last-apply` and expose `routes_dirty`; report the real line total from `/api/logs/history` | 2a2c4dd |
+| 260820-k3a | Routes page: checkbox batch delete, Apply Changes gated on pending work, Fill Descriptions scope dialog | e8720c9 |
+| 260820-kcg | Logs page: context menu acts on the selection, exclude filters, Copy filtered, virtualized log view, honest truncation counter | (this task) |
 
 ---
 
@@ -908,23 +927,68 @@ All endpoints require HTTP Basic Auth. JSON request/response unless noted.
 | DELETE | /api/routes/isp | Remove ISP CIDR | same as vpn |
 | POST | /api/routes/isp/bulk | Bulk-add ISP CIDRs | same as vpn bulk |
 | GET | /api/routes/backup | Download combined VPN/ISP route backup as text | text/plain — comment-prefixed route dump |
-| POST | /api/config/apply | Apply routes (routing.sh --no-update) | 200 {ok:true} or 500 {error} |
+| POST | /api/config/apply | Apply routes (routing.sh --no-update) | 200 {ok:true, routes_dirty} or 500 {error} |
 
 **Fill Descriptions (frontend):** the Routes page toolbar has a "Fill Descriptions" button that
-bulk-resolves org names for every listed route with an empty description, reusing
-`GET /api/diag/whois` (the same lookup as single-route add). Lookups run strictly sequentially
-(one `whois` call at a time — each spawns `asn-lookup.py` on the RPi, so batches over a handful
-of routes can take a while) and a failed/empty lookup is skipped without aborting the batch.
-Results are staged client-side and shown as `~ cidr # description` in the Pending changes diff;
-nothing is written until Apply Changes, which flushes staged descriptions via
+bulk-resolves org names via `GET /api/diag/whois` (the same lookup as single-route add). Clicking
+it opens a dialog asking for the scope: **Only missing**, which fills routes with an empty
+description, or **All routes**, which re-looks-up everything and replaces existing text. Both
+counts are shown before starting because lookups run strictly sequentially (one `whois` call at a
+time — each spawns `asn-lookup.py` on the RPi, so batches over a handful of routes can take a
+while); a failed/empty lookup is skipped without aborting the batch and leaves any existing
+description intact. The scope is the current *filtered* view, which the dialog states explicitly
+when a filter is active. Results are staged client-side and shown as `~ cidr # description` in the
+Pending changes diff; nothing is written until Apply Changes, which flushes staged descriptions via
 `PUT /api/routes/{list}` before calling `/api/config/apply`.
+
+**Batch delete (frontend):** each row has a checkbox and the header checkbox covers the current
+filtered/sorted view, so "select all" under an active filter means all matching rows. The selection
+is pruned whenever the visible set changes, so a row the user cannot see is never swept up. Deletion
+issues `DELETE /api/routes/{list}` **sequentially** — each call rewrites the whole route file on the
+RPi, so concurrent requests would read-modify-write over each other and lose entries. A partial
+failure is reported as "Removed X of N" rather than assumed to have succeeded.
+
+**Apply Changes gating (frontend):** the button is enabled only when something is genuinely pending —
+either staged client-side additions/description edits, or `routes_dirty` from `GET /api/status`.
+Staged entries alone are not sufficient: the single add/edit/delete endpoints write to the route
+files immediately and still require an apply, so a staging-only check would disable the button
+exactly when it is needed. An absent or not-yet-fetched `routes_dirty` counts as pending, so the
+failure mode is an always-enabled button rather than a permanently dead one.
+
+**routes_dirty:** `routing.sh` Stage 8b touches `/etc/splitgate/.last-apply` on every successful
+run. Stamping it in the script rather than the admin backend means all three apply paths count —
+`POST /api/config/apply`, `update-vpn-routes` from cron, and the boot-time `vpn-routing.service`.
+`_routes_dirty()` in `splitgate-admin.py` compares the mtimes of `vpn-routes-custom.txt` and
+`isp-routes-custom.txt` against that stamp; a missing stamp means never-applied and reads as dirty.
+It is `stat`-only (no file reads) because `/api/status` is polled and also streamed over SSE every
+10s. Side effect: route files edited outside the web admin — e.g. via `deploy-routes.sh` — also
+light up the button.
+
+**Log view (frontend):** two filter rows. The top row keeps lines matching **all** its terms
+(AND); the bottom row, marked with an eye-off icon, hides lines matching **any** of its terms (OR).
+Order of operations is include → exclude → "Hide duplicates", so a hidden line is never the one
+that survives dedupe and suppresses its visible duplicates. **Copy** places the filtered lines on
+the clipboard as raw text — the same content **Download** writes, not the humanized-timestamp
+display form, so pasted lines stay greppable. Right-clicking a row stages its /24; when rows are
+selected and the right-clicked row is one of them, the menu acts on the whole selection. Because
+`extractCidr` collapses each destination to its /24, several selected lines from one subnet yield a
+single route — the UI shows "N lines → M routes" whenever the two differ. The list is virtualized
+via `@tanstack/react-virtual` with a fixed row height, which is why `.log-row` is `white-space: pre`
+and long lines scroll sideways instead of wrapping: variable row heights would defeat a fixed
+`estimateSize`. Auto-scroll sticks to the bottom only when the view is already there, so reading
+back through history is not interrupted by the next SSE line.
+
+**Log history cap:** `/api/logs/history` tails each day's file to `HISTORY_DAY_CAP` (50000 lines)
+and reports the real line total, so the UI can distinguish a complete day from a tail. Before this,
+the response carried only the capped tail and the page rendered "5000 / 5000 lines" for a day with
+far more traffic.
 
 #### Logs
 
 | Method | Path | Description | Response |
 |--------|------|-------------|----------|
 | GET | /api/logs/watch | Live SSE stream from watch-YYYY-MM-DD.log | text/event-stream — "data: LINE\n\n" |
-| GET | /api/logs/history | Historical watch log lines for a date range | ?from=YYYY-MM-DD&to=YYYY-MM-DD (max 30 days) — {lines: [...], count} or 400 |
+| GET | /api/logs/history | Historical watch log lines for a date range | ?from=YYYY-MM-DD&to=YYYY-MM-DD (max 30 days) — {lines: [...], count, total, truncated, day_cap} or 400 |
 | GET | /api/logs/install | Last 500 lines of install.log | {lines: [...]} |
 | GET | /api/logs/watch-errors | Last 200 lines of watch-error.log | {lines: [...]} |
 | GET | /api/logs/journal | journalctl -u splitgate-watch -u awg0 -n 200 | {lines: [...]} |
